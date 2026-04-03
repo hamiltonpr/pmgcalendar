@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -b \"session=test\" http://localhost:5000/api/goals)",
+      "Bash(taskkill /f /im python.exe)",
+      "Bash(.venv/Scripts/python app.py)"
+    ]
+  }
+}

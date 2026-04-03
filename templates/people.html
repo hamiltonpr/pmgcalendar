@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Dot Legend -->
+<div class="card" style="margin-bottom:14px;">
+  <div style="padding:12px 16px;">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px;">Dot Guide</div>
+    <div class="dot-legend">
+      <span class="dot-legend-item"><span class="dot" style="background:#EAB308;"></span>Contact (active)</span>
+      <span class="dot-legend-item"><span class="dot" style="background:#22C55E;"></span>2 dates done</span>
+      <span class="dot-legend-item"><span class="dot" style="background:#7DD3FC;"></span>Engaged</span>
+      <span class="dot-legend-item"><span class="dot" style="background:#1D4ED8;"></span>Married / Family</span>
+      <span class="dot-legend-item"><span class="dot" style="background:#A855F7;"></span>Platonic friend</span>
+      <span class="dot-legend-item"><span class="dot" style="background:#9CA3AF;"></span>Inactive &gt;1 mo</span>
+      <span class="dot-legend-item"><span class="dot" style="background:#EF4444;"></span>Do not contact</span>
+    </div>
+  </div>
+</div>
+
+<!-- Add Person -->
+<div class="section-title">Add Person</div>
+<div class="card" style="margin-bottom:14px;">
+  <form id="addPersonForm" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input name="name" class="form-control" placeholder="Name *" style="flex:1;min-width:130px;" required />
+      <select name="dot" class="form-select" style="flex:1;min-width:140px;">
+        <option value="yellow">Yellow — Contact</option>
+        <option value="green">Green — 2 Dates</option>
+        <option value="lightblue">Light Blue — Engaged</option>
+        <option value="darkblue">Dark Blue — Married</option>
+        <option value="purple">Purple — Friend</option>
+        <option value="gray">Gray — Inactive</option>
+        <option value="red">Red — Avoid</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input name="met_where" class="form-control" placeholder="Where you met" style="flex:1;min-width:130px;" />
+      <input name="met_when" class="form-control" placeholder="When (e.g. Jan 2026)" style="flex:1;min-width:130px;" />
+    </div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button type="submit" class="btn btn-primary btn-sm">Add Person</button>
+    </div>
+  </form>
+</div>
+
+<!-- People List -->
+<div class="section-title">Contacts</div>
+<div class="card" id="peopleCard">
+  <div id="peopleList">
+    <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem;">No contacts yet.</div>
+  </div>
+</div>
+
+<!-- Person Detail Modal -->
+<div class="modal" id="personModal">
+  <div class="modal-backdrop" id="personModalBackdrop"></div>
+  <div class="modal-dialog" style="max-width:500px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title" id="personModalName">Person</span>
+        <button class="btn-close" id="personModalClose">✕</button>
+      </div>
+      <div class="modal-body" style="padding:0;">
+
+        <!-- Profile info -->
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <div id="personDotDisplay" style="width:18px;height:18px;border-radius:50%;background:#EAB308;flex-shrink:0;box-shadow:0 0 0 3px rgba(0,0,0,0.08);"></div>
+            <select id="personDotEdit" class="form-select" style="flex:1;">
+              <option value="yellow">Yellow — Contact</option>
+              <option value="green">Green — 2 Dates</option>
+              <option value="lightblue">Light Blue — Engaged</option>
+              <option value="darkblue">Dark Blue — Married</option>
+              <option value="purple">Purple — Friend</option>
+              <option value="gray">Gray — Inactive</option>
+              <option value="red">Red — Avoid</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <div style="flex:1;min-width:120px;">
+              <label class="form-label">Where you met</label>
+              <input id="personMetWhere" class="form-control w-100" placeholder="e.g. Ward, work, school" />
+            </div>
+            <div style="flex:1;min-width:120px;">
+              <label class="form-label">When you met</label>
+              <input id="personMetWhen" class="form-control w-100" placeholder="e.g. Jan 2026" />
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Notes</label>
+            <textarea id="personNotes" class="form-control w-100" rows="2" placeholder="Anything worth remembering…"></textarea>
+          </div>
+        </div>
+
+        <!-- Event history -->
+        <div style="padding:14px 20px;">
+          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px;">Event History</div>
+          <div id="personEventHistory">
+            <div style="color:var(--text-muted);font-size:0.83rem;padding:8px 0;">No events linked yet. Attach this person to calendar events.</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm me-auto" id="personDeleteBtn">Delete</button>
+        <button class="btn btn-secondary btn-sm" id="personCancelBtn">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="personSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

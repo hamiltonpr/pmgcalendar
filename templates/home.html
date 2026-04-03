@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="greeting">
+  <h2>Hey, {{ user }} 👋</h2>
+  <p id="weekLabel">This week</p>
+</div>
+
+<!-- Quote of the Day -->
+<div class="quote-card">
+  <div class="quote-text">
+    "Be of good cheer, for I will lead you along. The kingdom is yours and the blessings thereof are yours, and the riches of eternity are yours."
+  </div>
+  <div class="quote-source">— Doctrine &amp; Covenants 78:18 · Quote of the Day</div>
+</div>
+
+<!-- Weekly Indicators -->
+<div class="section-title">Weekly Indicators</div>
+<div class="card" id="indicatorsCard">
+  <div style="padding:28px;text-align:center;color:var(--text-muted);font-size:0.85rem;">Loading…</div>
+</div>
+<p style="font-size:0.7rem;color:var(--text-muted);margin-top:8px;padding-left:4px;">
+  Tap any indicator to update it. Past calendar events auto-fill where they match.
+</p>
+
+<!-- Indicator Edit Modal -->
+<div class="modal" id="indicatorModal">
+  <div class="modal-backdrop" id="indBackdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title"><span id="indModalIcon"></span>&nbsp;<span id="indModalName"></span></span>
+        <button class="btn-close" id="indClose">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Counter section (for counter-type indicators) -->
+        <div id="indCounterSection">
+          <div style="text-align:center;padding:8px 0 18px;">
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;" id="indCounterLabel">Times this week</div>
+            <div class="counter-widget">
+              <button class="counter-btn" id="indDecBtn">−</button>
+              <div>
+                <span class="counter-value" id="indCurrentVal">0</span><span style="font-size:1.4rem;font-weight:300;color:var(--text-muted);margin:0 4px;">/</span><span class="counter-goal-val" id="indGoalDisp">7</span>
+              </div>
+              <button class="counter-btn" id="indIncBtn">+</button>
+            </div>
+          </div>
+
+          <!-- Goal settings for counter types -->
+          <div id="indGoalSection" style="border-top:1px solid var(--border);padding-top:14px;">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px;">Goal</div>
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label class="form-label" style="margin:0;white-space:nowrap;">Target</label>
+                <input type="number" id="indGoalValue" class="form-control" style="width:72px;" min="1" max="99" value="1" />
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;" id="indPeriodWrap">
+                <label class="form-label" style="margin:0;">Per</label>
+                <select id="indGoalPeriod" class="form-select" style="width:auto;">
+                  <option value="daily">Day</option>
+                  <option value="weekly">Week</option>
+                  <option value="monthly">Month</option>
+                  <option value="bimonthly">2 Months</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toggle section (for yes/no indicators like Church, Ministering) -->
+        <div id="indToggleSection" style="display:none;">
+          <div style="text-align:center;padding:12px 0 20px;">
+            <div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:18px;" id="indToggleLabel">Attended this week?</div>
+            <div style="display:flex;gap:12px;justify-content:center;">
+              <button class="btn btn-secondary" id="indToggleNo" style="min-width:90px;font-size:0.95rem;">No</button>
+              <button class="btn btn-secondary" id="indToggleYes" style="min-width:90px;font-size:0.95rem;">Yes ✓</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="indCancelBtn">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="indSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

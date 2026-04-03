@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ username }}'s Calendar — Live My Gospel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><div class="brand-icon">✦</div> Live My Gospel</div>
+    <div class="user-info"><span>{{ username }}'s Calendar</span></div>
+  </header>
+  <div class="page" style="padding-top:70px;">
+    <div class="card" style="padding:4px;">
+      <div id="calendar"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+  <script>
+    const EVENTS = {{ events | tojson }};
+    document.addEventListener('DOMContentLoaded', function(){
+      const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
+        initialView: localStorage.getItem('calView') || (window.innerWidth < 700 ? 'dayGridMonth' : 'timeGridWeek'),
+        headerToolbar: { left:'prev,next today', center:'title', right:'timeGridDay,timeGridWeek,dayGridMonth' },
+        nowIndicator: true, height: 'auto',
+        events: EVENTS.map(e => ({
+          id: e.id,
+          title: e.title,
+          start: e.start,
+          end: e.end,
+          backgroundColor: '#1C3F7A',
+          borderColor: e.is_backup ? 'transparent' : '#1C3F7A',
+          textColor: '#fff',
+        })),
+      });
+      cal.render();
+    });
+  </script>
+</body>
+</html>
