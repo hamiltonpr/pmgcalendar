@@ -132,6 +132,10 @@
             <input type="checkbox" name="is_backup" id="isBackupCheck" style="accent-color:var(--primary);"/>
             Backup plan <span style="font-size:0.72rem;">(shown with dashed border)</span>
           </label>
+          <label id="taskCompleteWrap" style="display:none;align-items:center;gap:7px;font-size:0.82rem;color:var(--text-muted);cursor:pointer;margin-top:4px;">
+            <input type="checkbox" id="taskCompleteCheck" style="accent-color:#65A30D;"/>
+            Mark as completed
+          </label>
         </form>
       </div>
       <div class="modal-footer">
@@ -144,6 +148,42 @@
     </div>
   </div>
 </div>
+
+<!-- Mobile Event Bottom Sheet -->
+<div id="mobileSheet" class="mobile-sheet">
+  <div class="ms-handle"></div>
+  <div class="ms-header">
+    <button id="msClose" class="ms-btn-icon">✕</button>
+    <span id="msStepTitle" style="font-weight:700;font-size:0.95rem;">Choose Type</span>
+    <button id="msSave" class="btn btn-primary btn-sm" style="font-size:0.8rem;" disabled>Save</button>
+  </div>
+  <div id="msDateStrip" class="ms-date-strip" style="display:none;"></div>
+  <!-- Step 1: category picker -->
+  <div id="msStep1">
+    <div class="ms-cat-grid" id="msCatGrid"></div>
+  </div>
+  <!-- Step 2: duration + details -->
+  <div id="msStep2" style="display:none;">
+    <div class="ms-time-display">
+      <span id="msTimeStart" style="font-size:0.82rem;font-weight:700;white-space:nowrap;"></span>
+      <div class="ms-time-bar"><div id="msTimeBlock"></div></div>
+      <span id="msTimeEnd" style="font-size:0.82rem;font-weight:700;white-space:nowrap;"></span>
+    </div>
+    <input type="range" id="msDurationSlider" min="1" max="32" step="1" value="4" style="width:calc(100% - 32px);margin:6px 16px;accent-color:var(--primary);">
+    <div class="ms-quick-durations">
+      <button data-steps="1">15m</button>
+      <button data-steps="2">30m</button>
+      <button data-steps="4" class="active">1h</button>
+      <button data-steps="6">1.5h</button>
+      <button data-steps="8">2h</button>
+    </div>
+    <div style="padding:0 16px 20px;">
+      <input id="msTitleInput" class="ms-title-input" placeholder="Title…" autocomplete="off" type="text">
+      <textarea id="msNotesInput" class="ms-notes-input" placeholder="Notes… (optional)" rows="2"></textarea>
+    </div>
+  </div>
+</div>
+<div id="msBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:1999;"></div>
 
 <script>
 // Recur UI is driven by app.js updateRecurUI(); this is just a safety fallback

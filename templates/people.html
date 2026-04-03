@@ -62,8 +62,15 @@
       </div>
       <div class="modal-body" style="padding:0;">
 
-        <!-- Profile info -->
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+        <!-- Tab bar -->
+        <div class="person-tabs">
+          <button class="ptab active" data-tab="profile">Profile</button>
+          <button class="ptab" data-tab="progress">Progress</button>
+          <button class="ptab" data-tab="timeline">Timeline</button>
+        </div>
+
+        <!-- Profile tab -->
+        <div class="ptab-panel" id="ptab-profile">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
             <div id="personDotDisplay" style="width:18px;height:18px;border-radius:50%;background:#EAB308;flex-shrink:0;box-shadow:0 0 0 3px rgba(0,0,0,0.08);"></div>
             <select id="personDotEdit" class="form-select" style="flex:1;">
@@ -86,18 +93,44 @@
               <input id="personMetWhen" class="form-control w-100" placeholder="e.g. Jan 2026" />
             </div>
           </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <div style="flex:1;min-width:120px;">
+              <label class="form-label">Phone</label>
+              <input id="personPhone" class="form-control w-100" placeholder="e.g. (801) 555-1234" type="tel" />
+            </div>
+            <div style="flex:1;min-width:120px;">
+              <label class="form-label">Birthday</label>
+              <input id="personBirthday" class="form-control w-100" placeholder="e.g. Mar 14" />
+            </div>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label class="form-label">Address</label>
+            <input id="personAddress" class="form-control w-100" placeholder="Street, City, State" />
+          </div>
+          <div style="margin-bottom:10px;">
+            <label class="form-label">Instagram</label>
+            <input id="personInstagram" class="form-control w-100" placeholder="@username" />
+          </div>
           <div>
             <label class="form-label">Notes</label>
             <textarea id="personNotes" class="form-control w-100" rows="2" placeholder="Anything worth remembering…"></textarea>
           </div>
         </div>
 
-        <!-- Event history -->
-        <div style="padding:14px 20px;">
-          <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px;">Event History</div>
-          <div id="personEventHistory">
-            <div style="color:var(--text-muted);font-size:0.83rem;padding:8px 0;">No events linked yet. Attach this person to calendar events.</div>
+        <!-- Progress tab -->
+        <div class="ptab-panel" id="ptab-progress" style="display:none;">
+          <div id="personProgressPanel">
+            <div style="color:var(--text-muted);font-size:0.85rem;">Loading…</div>
           </div>
+        </div>
+
+        <!-- Timeline tab -->
+        <div class="ptab-panel" id="ptab-timeline" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);">Events</div>
+            <button class="btn btn-secondary btn-sm" id="linkEventBtn" style="font-size:0.72rem;padding:3px 10px;">+ Link Event</button>
+          </div>
+          <div id="personEventHistory"></div>
         </div>
 
       </div>
@@ -106,6 +139,23 @@
         <button class="btn btn-secondary btn-sm" id="personCancelBtn">Cancel</button>
         <button class="btn btn-primary btn-sm" id="personSaveBtn">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Link Event Picker Modal -->
+<div class="modal" id="linkEventModal">
+  <div class="modal-backdrop" id="linkEventModalBackdrop"></div>
+  <div class="modal-dialog" style="max-width:420px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">Link a Past Event</span>
+        <button class="btn-close" id="linkEventClose">✕</button>
+      </div>
+      <div style="padding:12px 16px 4px;">
+        <input type="text" id="linkEventSearch" class="form-control" placeholder="Search events…">
+      </div>
+      <div id="linkEventList" style="max-height:340px;overflow-y:auto;padding:8px 16px 16px;"></div>
     </div>
   </div>
 </div>

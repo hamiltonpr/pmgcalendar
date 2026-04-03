@@ -1,7 +1,8 @@
 // ─── Constants (fallbacks only — real data comes from API) ───────────────────
 const FALLBACK_CAT_COLORS = {
-  study:'#7C3AED', class:'#2563EB', work:'#DC2626', dates:'#D97706',
-  contact:'#16A34A', meeting:'#DB2777', eating:'#92400E'
+  contact:'#16A34A', class:'#CA8A04', social:'#9333EA', meeting:'#F472B6',
+  study:'#7C3AED',   service:'#1D4ED8', wedding:'#0284C7', travel:'#9A3412',
+  meal:'#B45309',    task:'#65A30D',    other:'#6B7280'
 };
 
 const DOT_KEYS = ['yellow','green','lightblue','darkblue','purple','gray','red'];
@@ -99,7 +100,8 @@ function expandRecurring(events) {
       if (!exceptions.has(key)) {
         const instEnd = duration ? new Date(dt.getTime()+duration) : null;
         expanded.push({...ev, _instanceId:`recur-${ev.id}-${idx}`, _originalId:ev.id,
-          start:dt.toISOString(), end:instEnd?instEnd.toISOString():null, _instanceDate:key});
+          start:dt.toISOString(), end:instEnd?instEnd.toISOString():null, _instanceDate:key,
+          _masterStart:ev.start, _masterEnd:ev.end});
         idx++;
       }
     }
@@ -154,7 +156,7 @@ async function autoDotCheckAll() {
   const updates = [];
   people.forEach(person => {
     const pastDates = events.filter(ev =>
-      String(ev.person_id)===String(person.id) && ev.category==='dates' && ev.start && new Date(ev.start)<=now
+      String(ev.person_id)===String(person.id) && ev.category==='social' && ev.start && new Date(ev.start)<=now
     ).length;
     let newDot = person.dot;
     if (pastDates >= datesForGreen && person.dot==='yellow') newDot = 'green';
@@ -179,7 +181,7 @@ async function autoDotCheck(personId) {
   const person = people.find(p => String(p.id)===String(personId));
   if (!person) return;
   const pastDates = events.filter(ev =>
-    String(ev.person_id)===String(personId) && ev.category==='dates' && ev.start && new Date(ev.start)<=now
+    String(ev.person_id)===String(personId) && ev.category==='social' && ev.start && new Date(ev.start)<=now
   ).length;
   let newDot = person.dot;
   if (pastDates >= datesForGreen && person.dot==='yellow') newDot = 'green';
@@ -226,6 +228,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let _editScope = 'all';        // 'all' | 'one'
     let _editInstanceDate = null;  // ISO date string of clicked instance
     let _editOriginalId = null;    // master event id for recurring
+    let _masterStartDate = null;   // YYYY-MM-DD of master event's original start
+    let _masterEndDate   = null;   // YYYY-MM-DD of master event's original end
 
     function updateRecurUI(recurVal, startDate) {
       document.getElementById('recurEndWrap').style.display = recurVal==='none' ? 'none' : 'block';
@@ -310,8 +314,9 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('deleteOneEvent').style.display='none';
       document.getElementById('recurScopeBar').style.display='none';
       document.getElementById('isBackupCheck').checked=false;
+      const tcw=document.getElementById('taskCompleteWrap'); if(tcw){tcw.style.display='none'; document.getElementById('taskCompleteCheck').checked=false;}
       document.getElementById('modalHeading').textContent='New Event';
-      _editScope='all'; _editInstanceDate=null; _editOriginalId=null;
+      _editScope='all'; _editInstanceDate=null; _editOriginalId=null; _masterStartDate=null; _masterEndDate=null;
       populatePersonSelect('');
     }
 
@@ -340,12 +345,16 @@ document.addEventListener('DOMContentLoaded', function () {
         allCats.forEach(c => {
           const opt = document.createElement('option');
           opt.value = c.key;
-          opt.textContent = `${c.emoji||''} ${c.name}`;
+          opt.textContent = `${c.emoji||''} ${c.name}`.trim();
           catSel.appendChild(opt);
+        });
+        catSel.addEventListener('change', function() {
+          const tw = document.getElementById('taskCompleteWrap');
+          if (tw) tw.style.display = this.value === 'task' ? 'flex' : 'none';
         });
       }
 
-      const savedView = localStorage.getItem('calView') || (window.innerWidth < 700 ? 'dayGridMonth' : 'timeGridWeek');
+      const savedView = localStorage.getItem('calView') || (window.innerWidth < 700 ? 'timeGridDay' : 'timeGridWeek');
       calInstance = new FullCalendar.Calendar(calendarEl, {
         initialView: savedView,
         headerToolbar: { left:'prev,next today', center:'title', right:'timeGridDay,timeGridWeek,dayGridMonth,listWeek' },
@@ -354,6 +363,7 @@ document.addEventListener('DOMContentLoaded', function () {
         viewDidMount: function(info) { localStorage.setItem('calView', info.view.type); },
 
         select: function(info) {
+          if (window.innerWidth < 700) { openMobileSheet(info.start); return; }
           resetForm(info.start);
           const form = document.getElementById('eventForm');
           form.start_date.value = toDateStr(info.start);
@@ -363,6 +373,7 @@ document.addEventListener('DOMContentLoaded', function () {
           openEventModal();
         },
         dateClick: function(info) {
+          if (window.innerWidth < 700) { openMobileSheet(info.date); return; }
           resetForm(info.date);
           openEventModal();
         },
@@ -373,6 +384,8 @@ document.addEventListener('DOMContentLoaded', function () {
           _editOriginalId = p.originalId||e.id;
           _editInstanceDate = p._instanceDate||null;
           _editScope = 'all';
+          _masterStartDate = p.masterStart ? p.masterStart.slice(0,10) : null;
+          _masterEndDate   = p.masterEnd   ? p.masterEnd.slice(0,10)   : null;
           form.id.value = _editOriginalId;
           form.title.value = e.title;
           form.notes.value = p.notes||'';
@@ -394,6 +407,12 @@ document.addEventListener('DOMContentLoaded', function () {
           updateRecurUI(p.recur||'none', e.start);
           populatePersonSelect(p.person_id||'');
           document.getElementById('isBackupCheck').checked = !!p.is_backup;
+          // Task complete checkbox
+          const taskWrap = document.getElementById('taskCompleteWrap');
+          if (taskWrap) {
+            taskWrap.style.display = p.category === 'task' ? 'flex' : 'none';
+            document.getElementById('taskCompleteCheck').checked = !!p.completed;
+          }
           // Scope bar
           const scopeBar = document.getElementById('recurScopeBar');
           scopeBar.style.display = isRecurring ? 'flex' : 'none';
@@ -407,16 +426,25 @@ document.addEventListener('DOMContentLoaded', function () {
           openEventModal();
         },
         eventContent: function(arg) {
+          const p = arg.event.extendedProps;
+          const isTask = p.category === 'task';
+          const isDone = isTask && p.completed;
           const wrap = document.createElement('div');
           wrap.style.cssText='padding:1px 3px;overflow:hidden;';
           const t = document.createElement('div');
-          t.style.cssText='font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.78rem;';
-          t.textContent = arg.event.title;
+          t.style.cssText=`font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.78rem;${isDone?'text-decoration:line-through;opacity:0.65;':''}`;
+          if (isDone) {
+            t.innerHTML = `<span style="font-size:0.65rem;background:#65A30D;color:#fff;border-radius:3px;padding:0 3px;margin-right:3px;">✓</span>${escapeHtml(arg.event.title)}`;
+          } else if (isTask) {
+            t.innerHTML = `<span style="font-size:0.65rem;border:1px solid rgba(255,255,255,0.6);border-radius:3px;padding:0 3px;margin-right:3px;">☐</span>${escapeHtml(arg.event.title)}`;
+          } else {
+            t.textContent = arg.event.title;
+          }
           wrap.appendChild(t);
-          if (arg.event.extendedProps.notes) {
+          if (p.notes) {
             const n = document.createElement('div');
             n.style.cssText='font-size:0.68rem;opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-            n.textContent = arg.event.extendedProps.notes;
+            n.textContent = p.notes;
             wrap.appendChild(n);
           }
           return { domNodes: [wrap] };
@@ -437,19 +465,201 @@ document.addEventListener('DOMContentLoaded', function () {
               id: e._instanceId||e.id,
               title: e.title,
               start: e.start, end: e.end,
+              allDay: !e.start || !e.start.includes('T'),
               backgroundColor: categoryColorMap[e.category]||'#6B7280',
               borderColor:     categoryColorMap[e.category]||'#6B7280',
               textColor: '#fff',
               classNames: e.is_backup ? ['backup-event'] : [],
               extendedProps: { notes:e.notes, category:e.category, recur:e.recur||'none',
                 recur_end:e.recur_end||'', recur_config:e.recur_config||'{}',
-                person_id:e.person_id||'', is_backup:e.is_backup||0,
-                _instanceDate:e._instanceDate||null, originalId:e._originalId||e.id }
+                person_id:e.person_id||'', is_backup:e.is_backup||0, completed:e.completed||0,
+                _instanceDate:e._instanceDate||null, originalId:e._originalId||e.id,
+                masterStart:e._masterStart||null, masterEnd:e._masterEnd||null }
             })));
           });
+        },
+        eventsSet: function(fcEvents) {
+          if (!calInstance) return;
+          const view = calInstance.view;
+          const viewStart = view.currentStart;
+          const viewEnd   = view.currentEnd;
+          let earliest = null;
+          fcEvents.forEach(e => {
+            if (!e.start || e.allDay) return;
+            if (e.start >= viewStart && e.start < viewEnd) {
+              if (!earliest || e.start < earliest) earliest = e.start;
+            }
+          });
+          const h = earliest ? Math.max(0, earliest.getHours() - 1) : 7;
+          calInstance.scrollToTime(`${String(h).padStart(2,'0')}:00:00`);
         }
       });
       calInstance.render();
+
+      // ── Mobile touch: swipe left/right to navigate ──────────────────────────
+      (function addCalendarTouch() {
+        let txStart = 0, tyStart = 0;
+        calendarEl.addEventListener('touchstart', e => {
+          txStart = e.touches[0].clientX;
+          tyStart = e.touches[0].clientY;
+        }, { passive: true });
+        calendarEl.addEventListener('touchend', e => {
+          const dx = e.changedTouches[0].clientX - txStart;
+          const dy = e.changedTouches[0].clientY - tyStart;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            dx < 0 ? calInstance.next() : calInstance.prev();
+          }
+        }, { passive: true });
+      })();
+
+      // ── Mobile touch: pinch to switch view (spread=zoom in, pinch=zoom out) ─
+      (function addCalendarPinch() {
+        let pinchStartDist = 0;
+        calendarEl.addEventListener('touchstart', e => {
+          if (e.touches.length === 2) {
+            pinchStartDist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY);
+          }
+        }, { passive: true });
+        calendarEl.addEventListener('touchend', e => {
+          if (!pinchStartDist || e.changedTouches.length < 2) { pinchStartDist = 0; return; }
+          const endDist = Math.hypot(
+            e.changedTouches[0].clientX - e.changedTouches[1].clientX,
+            e.changedTouches[0].clientY - e.changedTouches[1].clientY);
+          const views = ['dayGridMonth','timeGridWeek','timeGridDay'];
+          const idx = views.indexOf(calInstance.view.type);
+          if (endDist > pinchStartDist + 40 && idx < views.length - 1)
+            calInstance.changeView(views[idx + 1]);
+          else if (endDist < pinchStartDist - 40 && idx > 0)
+            calInstance.changeView(views[idx - 1]);
+          pinchStartDist = 0;
+        }, { passive: true });
+      })();
+
+      // ── Mobile event bottom sheet ─────────────────────────────────────────
+      let _msStartDate = null, _msCategory = null, _msDurationSteps = 4;
+
+      function openMobileSheet(startDate) {
+        _msStartDate = new Date(startDate);
+        _msCategory = null;
+        _msDurationSteps = 4;
+        buildMsDateStrip(_msStartDate);
+        buildMsCatGrid();
+        document.getElementById('msStep1').style.display = '';
+        document.getElementById('msStep2').style.display = 'none';
+        document.getElementById('msDateStrip').style.display = 'none';
+        document.getElementById('msStepTitle').textContent = 'Choose Type';
+        document.getElementById('msSave').disabled = true;
+        document.getElementById('msTitleInput').value = '';
+        document.getElementById('msNotesInput').value = '';
+        document.getElementById('msDurationSlider').value = 4;
+        document.querySelectorAll('.ms-quick-durations button').forEach(b => b.classList.toggle('active', b.dataset.steps === '4'));
+        document.getElementById('mobileSheet').classList.add('open');
+        document.getElementById('msBackdrop').style.display = 'block';
+      }
+
+      function closeMobileSheet() {
+        document.getElementById('mobileSheet').classList.remove('open');
+        document.getElementById('msBackdrop').style.display = 'none';
+      }
+
+      function buildMsDateStrip(centerDate) {
+        const strip = document.getElementById('msDateStrip');
+        strip.innerHTML = '';
+        const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+        for (let i = -3; i <= 3; i++) {
+          const d = new Date(centerDate); d.setDate(d.getDate() + i);
+          const chip = document.createElement('div');
+          chip.className = 'ms-date-chip' + (i === 0 ? ' active' : '');
+          if (i === 0 && _msCategory) chip.style.background = categoryColorMap[_msCategory] || '#6B7280';
+          chip.innerHTML = `<div style="font-size:0.62rem;opacity:0.7;">${days[d.getDay()]}</div><div>${d.getDate()}</div>`;
+          chip.addEventListener('click', () => {
+            _msStartDate = new Date(centerDate);
+            _msStartDate.setDate(centerDate.getDate() + i);
+            buildMsDateStrip(_msStartDate);
+            updateMsTimeDisplay();
+          });
+          strip.appendChild(chip);
+        }
+        setTimeout(() => {
+          const active = strip.querySelector('.active');
+          if (active) active.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
+        }, 50);
+      }
+
+      function buildMsCatGrid() {
+        const grid = document.getElementById('msCatGrid');
+        grid.innerHTML = '';
+        allCats.forEach(cat => {
+          const tile = document.createElement('div');
+          tile.className = 'ms-cat-tile';
+          tile.style.background = categoryColorMap[cat.key] || '#6B7280';
+          tile.innerHTML = `<div style="font-size:1.4rem;">${cat.emoji||'📅'}</div><div class="ms-cat-name">${escapeHtml(cat.name)}</div>`;
+          tile.addEventListener('click', () => selectMsCategory(cat.key, cat));
+          grid.appendChild(tile);
+        });
+      }
+
+      function selectMsCategory(key, cat) {
+        _msCategory = key;
+        document.getElementById('msStep1').style.display = 'none';
+        document.getElementById('msStep2').style.display = '';
+        document.getElementById('msDateStrip').style.display = '';
+        document.getElementById('msStepTitle').textContent = cat ? cat.name : key;
+        document.getElementById('msTimeBlock').style.background = categoryColorMap[key] || '#6B7280';
+        document.getElementById('msSave').disabled = false;
+        buildMsDateStrip(_msStartDate);
+        updateMsTimeDisplay();
+        document.getElementById('msTitleInput').focus();
+      }
+
+      function updateMsTimeDisplay() {
+        if (!_msStartDate) return;
+        const startMin = _msStartDate.getHours() * 60 + _msStartDate.getMinutes();
+        const endMin = startMin + _msDurationSteps * 15;
+        const fmt = m => { const h=Math.floor(m/60)%24, mn=m%60, ap=h>=12?'PM':'AM', h12=h%12||12; return `${h12}:${String(mn).padStart(2,'0')} ${ap}`; };
+        document.getElementById('msTimeStart').textContent = fmt(startMin);
+        document.getElementById('msTimeEnd').textContent = fmt(endMin);
+        const pct = Math.min(100, (_msDurationSteps / 32) * 100);
+        document.getElementById('msTimeBlock').style.width = pct + '%';
+      }
+
+      document.getElementById('msDurationSlider')?.addEventListener('input', function() {
+        _msDurationSteps = parseInt(this.value);
+        document.querySelectorAll('.ms-quick-durations button').forEach(b => b.classList.remove('active'));
+        updateMsTimeDisplay();
+      });
+
+      document.querySelectorAll('.ms-quick-durations button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          _msDurationSteps = parseInt(btn.dataset.steps);
+          document.getElementById('msDurationSlider').value = _msDurationSteps;
+          document.querySelectorAll('.ms-quick-durations button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          updateMsTimeDisplay();
+        });
+      });
+
+      document.getElementById('msClose')?.addEventListener('click', closeMobileSheet);
+      document.getElementById('msBackdrop')?.addEventListener('click', closeMobileSheet);
+
+      document.getElementById('msSave')?.addEventListener('click', async () => {
+        const title = document.getElementById('msTitleInput').value.trim();
+        if (!title || !_msCategory || !_msStartDate) return;
+        const start = new Date(_msStartDate);
+        const end = new Date(start.getTime() + _msDurationSteps * 15 * 60000);
+        await fetch('/api/events', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            title, category: _msCategory,
+            start: start.toISOString(), end: end.toISOString(),
+            notes: document.getElementById('msNotesInput').value,
+            recur: 'none', completed: 0
+          })
+        });
+        closeMobileSheet();
+        calInstance.refetchEvents();
+      });
     }
 
     // Save event
@@ -459,20 +669,25 @@ document.addEventListener('DOMContentLoaded', function () {
       const recur = (rSel && _editScope==='all') ? rSel.value : 'none';
       const pSel = document.getElementById('personSelect');
       const catSel2 = document.getElementById('eventCategorySelect');
-      const start = buildDatetime(form.start_date.value,form.start_hour.value,form.start_minute.value,form.start_ampm.value);
+      // For 'all' scope on a recurring event, lock to master's original date (only allow time changes)
+      const startDatePart = (_editScope==='all' && _masterStartDate) ? _masterStartDate : form.start_date.value;
+      const endDatePart   = (_editScope==='all' && _masterEndDate)   ? _masterEndDate   : form.end_date.value;
+      const start = buildDatetime(startDatePart, form.start_hour.value, form.start_minute.value, form.start_ampm.value);
+      const end   = buildDatetime(endDatePart,   form.end_hour.value,   form.end_minute.value,   form.end_ampm.value) || null;
       const payload = {
         // For 'one' scope: no id → creates new one-off event
         id: _editScope==='one' ? '' : form.id.value,
         title: form.title.value,
         start: start,
-        end:   buildDatetime(form.end_date.value,form.end_hour.value,form.end_minute.value,form.end_ampm.value)||null,
+        end:   end,
         category: catSel2 ? catSel2.value : (form.category?.value||'study'),
         notes: form.notes.value,
         recur: recur,
         recur_end: (recur!=='none'&&form.recur_end.value) ? form.recur_end.value : null,
         recur_config: buildRecurConfig(recur, start),
         person_id: pSel ? (pSel.value||null) : null,
-        is_backup: document.getElementById('isBackupCheck')?.checked ? 1 : 0
+        is_backup: document.getElementById('isBackupCheck')?.checked ? 1 : 0,
+        completed: document.getElementById('taskCompleteCheck')?.checked ? 1 : 0
       };
       await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       // If editing just this occurrence, add exception to master so original series skips this date
@@ -663,6 +878,52 @@ document.addEventListener('DOMContentLoaded', function () {
       renderIndicators();
     }
     loadIndicators();
+
+    // ── Progressing People ──────────────────────────────────────────────────
+    const ppList = document.getElementById('progressingPeopleList');
+    if (ppList) {
+      (async () => {
+        try {
+          const [people, events] = await Promise.all([
+            fetch('/api/people').then(r=>r.json()),
+            fetch('/api/events').then(r=>r.json())
+          ]);
+          // For each person find their most recent linked event
+          const withActivity = people.map(p => {
+            const linked = events.filter(ev=>String(ev.person_id)===String(p.id)&&ev.start);
+            const latest = linked.sort((a,b)=>new Date(b.start)-new Date(a.start))[0];
+            return {...p, _latestEvent: latest||null};
+          }).filter(p=>p._latestEvent).sort((a,b)=>new Date(b._latestEvent.start)-new Date(a._latestEvent.start)).slice(0,4);
+          if (!withActivity.length) {
+            ppList.innerHTML='<div style="padding:8px 0;color:var(--text-muted);font-size:0.85rem;">No recent activity yet.</div>'; return;
+          }
+          ppList.innerHTML='';
+          const now=new Date();
+          withActivity.forEach(p => {
+            const ev=p._latestEvent;
+            const daysAgo=Math.floor((now-new Date(ev.start))/(1000*86400));
+            const ago=daysAgo===0?'Today':daysAgo===1?'Yesterday':`${daysAgo}d ago`;
+            const color=DOT_COLOR[p.dot]||'#EAB308';
+            const evColor=FALLBACK_CAT_COLORS[ev.category]||'#6B7280';
+            const row=document.createElement('a');
+            row.href='/people'; row.className='person-row'; row.style.textDecoration='none';
+            row.innerHTML=`
+              <span class="dot" style="background:${color};"></span>
+              <div style="flex:1;min-width:0;">
+                <div class="person-name">${escapeHtml(p.name)}</div>
+                <div class="person-meta" style="display:flex;align-items:center;gap:5px;">
+                  <span style="width:7px;height:7px;border-radius:50%;background:${evColor};display:inline-block;flex-shrink:0;"></span>
+                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(ev.title||'')}</span>
+                </div>
+              </div>
+              <span style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;">${ago}</span>`;
+            ppList.appendChild(row);
+          });
+        } catch(e) {
+          ppList.innerHTML='<div style="color:var(--text-muted);font-size:0.85rem;padding:8px 0;">Could not load.</div>';
+        }
+      })();
+    }
   }
 
   // ─── People ────────────────────────────────────────────────────────────────
@@ -688,7 +949,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const now=new Date(); container.innerHTML='';
       _allPeople.forEach(p=>{
         const dotKey=p.dot||'yellow', color=DOT_COLOR[dotKey]||dotKey, label=DOT_LABEL[dotKey]||dotKey;
-        const dateCount=_allEvents.filter(ev=>String(ev.person_id)===String(p.id)&&ev.category==='dates'&&ev.start&&new Date(ev.start)<=now).length;
+        const dateCount=_allEvents.filter(ev=>String(ev.person_id)===String(p.id)&&ev.category==='social'&&ev.start&&new Date(ev.start)<=now).length;
         const metInfo=[p.met_where,p.met_when].filter(Boolean).join(' · ');
         const sub=[label,dateCount?`${dateCount} date${dateCount!==1?'s':''}`:'',metInfo].filter(Boolean).join(' · ');
         const row=document.createElement('div'); row.className='person-row';
@@ -712,11 +973,86 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('personMetWhere').value=p.met_where||'';
       document.getElementById('personMetWhen').value=p.met_when||'';
       document.getElementById('personNotes').value=p.notes||'';
+      document.getElementById('personPhone').value=p.phone||'';
+      document.getElementById('personAddress').value=p.address||'';
+      document.getElementById('personBirthday').value=p.birthday||'';
+      document.getElementById('personInstagram').value=p.instagram||'';
       document.getElementById('personDotEdit').onchange=function(){
         document.getElementById('personDotDisplay').style.background=DOT_COLOR[this.value]||this.value;
       };
+      // Reset to Profile tab
+      document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.ptab-panel').forEach(t=>t.style.display='none');
+      document.querySelector('.ptab[data-tab="profile"]').classList.add('active');
+      document.getElementById('ptab-profile').style.display='';
       renderPersonEventHistory(p);
       openModal('personModal');
+    }
+
+    // Tab switching
+    document.querySelectorAll('.ptab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
+        document.querySelectorAll('.ptab-panel').forEach(t=>t.style.display='none');
+        this.classList.add('active');
+        document.getElementById('ptab-'+this.dataset.tab).style.display='';
+        if (this.dataset.tab === 'progress' && _activePerson) renderPersonProgress(_activePerson);
+        if (this.dataset.tab === 'timeline' && _activePerson) renderPersonEventHistory(_activePerson);
+      });
+    });
+
+    async function renderPersonProgress(p) {
+      const panel = document.getElementById('personProgressPanel');
+      panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Loading…</div>';
+      // Stats
+      const now = new Date();
+      const linked = _allEvents.filter(ev=>String(ev.person_id)===String(p.id)&&ev.start);
+      const total = linked.length;
+      const outings = linked.filter(ev=>ev.category==='social').length;
+      const lastEv = linked.sort((a,b)=>new Date(b.start)-new Date(a.start))[0];
+      const daysSince = lastEv ? Math.floor((now-new Date(lastEv.start))/(1000*86400)) : null;
+      const dotColor = DOT_COLOR[p.dot]||'#EAB308';
+      const dotLabel = DOT_LABEL[p.dot]||p.dot;
+      let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+        <div style="flex:1;min-width:80px;text-align:center;background:var(--bg);border-radius:12px;padding:12px 8px;">
+          <div style="font-size:1.4rem;font-weight:700;">${total}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);">Total events</div>
+        </div>
+        <div style="flex:1;min-width:80px;text-align:center;background:var(--bg);border-radius:12px;padding:12px 8px;">
+          <div style="font-size:1.4rem;font-weight:700;">${outings}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);">Social outings</div>
+        </div>
+        <div style="flex:1;min-width:80px;text-align:center;background:var(--bg);border-radius:12px;padding:12px 8px;">
+          <div style="font-size:1.4rem;font-weight:700;">${daysSince!==null?(daysSince===0?'Today':daysSince+'d'):'—'}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);">Since last event</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:14px;height:14px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
+        <span style="font-size:0.85rem;font-weight:600;">Current: ${escapeHtml(dotLabel)}</span>
+      </div>`;
+      // Dot history
+      try {
+        const histRes = await fetch(`/api/people/${p.id}/dot-history`);
+        const hist = await histRes.json();
+        if (hist.length) {
+          html += `<div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px;">Status History</div>`;
+          hist.reverse().forEach(h => {
+            const d = new Date(h.changed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+            const fc=DOT_COLOR[h.from_dot]||'#9CA3AF', tc=DOT_COLOR[h.to_dot]||'#9CA3AF';
+            html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+              <div style="width:10px;height:10px;border-radius:50%;background:${fc};flex-shrink:0;"></div>
+              <span style="font-size:0.72rem;color:var(--text-muted);">→</span>
+              <div style="width:10px;height:10px;border-radius:50%;background:${tc};flex-shrink:0;"></div>
+              <span style="font-size:0.8rem;flex:1;">${escapeHtml(DOT_LABEL[h.to_dot]||h.to_dot)}</span>
+              <span style="font-size:0.72rem;color:var(--text-muted);">${d}</span>
+            </div>`;
+          });
+        } else {
+          html += `<div style="color:var(--text-muted);font-size:0.83rem;">No status changes recorded yet.</div>`;
+        }
+      } catch(e) { html += `<div style="color:var(--text-muted);font-size:0.83rem;">Could not load history.</div>`; }
+      panel.innerHTML = html;
     }
 
     function renderPersonEventHistory(p) {
@@ -727,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', function () {
         container.innerHTML='<div style="color:var(--text-muted);font-size:0.83rem;padding:4px 0;">No events linked yet.</div>'; return;
       }
       container.innerHTML='';
-      const catLabels={study:'Study',class:'Class',work:'Work',dates:'Date',contact:'Contact',meeting:'Meeting',eating:'Eating'};
+      const catLabels={contact:'Contact',class:'Class',social:'Social',meeting:'Meeting',study:'Study',service:'Service',wedding:'Wedding',travel:'Travel',meal:'Meal',task:'Task',other:'Other'};
       linked.forEach(ev=>{
         const color=FALLBACK_CAT_COLORS[ev.category]||'#9CA3AF';
         const dateStr=new Date(ev.start).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
@@ -737,11 +1073,27 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="event-history-dot" style="background:${color};"></div>
             <div class="event-history-line"></div>
           </div>
-          <div class="event-history-content">
-            <div class="event-history-title">${escapeHtml(ev.title||'(no title)')}</div>
+          <div class="event-history-content" style="flex:1;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
+              <div class="event-history-title">${escapeHtml(ev.title||'(no title)')}</div>
+              <button class="btn-unlink" data-id="${ev.id}" title="Unlink event" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:0.85rem;padding:0;line-height:1;flex-shrink:0;">✕</button>
+            </div>
             <div class="event-history-date">${dateStr} · ${catLabels[ev.category]||ev.category}</div>
             ${ev.notes?`<div class="event-history-notes">${escapeHtml(ev.notes)}</div>`:''}
           </div>`;
+        item.querySelector('.btn-unlink').addEventListener('click', async function() {
+          const evId = parseInt(this.dataset.id);
+          const target = _allEvents.find(x=>x.id===evId);
+          if (!target) return;
+          await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:evId,title:target.title,start:target.start,end:target.end,
+              category:target.category,notes:target.notes||'',person_id:null,
+              recur:target.recur||'none',recur_end:target.recur_end||null,
+              recur_config:target.recur_config||null,is_backup:target.is_backup||0})});
+          const eRes = await fetch('/api/events');
+          _allEvents = await eRes.json();
+          if (_activePerson) renderPersonEventHistory(_activePerson);
+        });
         container.appendChild(item);
       });
     }
@@ -752,10 +1104,15 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('personSaveBtn').addEventListener('click', async ()=>{
       if (!_activePerson) return;
       await fetch('/api/people',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({id:_activePerson.id,dot:document.getElementById('personDotEdit').value,
+        body:JSON.stringify({id:_activePerson.id,
+          dot:document.getElementById('personDotEdit').value,
           notes:document.getElementById('personNotes').value,
           met_where:document.getElementById('personMetWhere').value,
-          met_when:document.getElementById('personMetWhen').value})});
+          met_when:document.getElementById('personMetWhen').value,
+          phone:document.getElementById('personPhone').value,
+          address:document.getElementById('personAddress').value,
+          birthday:document.getElementById('personBirthday').value,
+          instagram:document.getElementById('personInstagram').value})});
       closeModal('personModal'); loadPeople();
     });
     document.getElementById('personDeleteBtn').addEventListener('click', async ()=>{
@@ -763,6 +1120,54 @@ document.addEventListener('DOMContentLoaded', function () {
       await fetch(`/api/people/${_activePerson.id}`,{method:'DELETE'});
       closeModal('personModal'); loadPeople();
     });
+
+    // ── Link Event modal ────────────────────────────────────────────────────
+    function renderLinkEventList(filter) {
+      const list = document.getElementById('linkEventList');
+      if (!list) return;
+      const candidates = _allEvents
+        .filter(ev => !ev.person_id || String(ev.person_id) !== String(_activePerson?.id))
+        .filter(ev => ev.start)
+        .filter(ev => !filter || (ev.title||'').toLowerCase().includes(filter))
+        .sort((a,b) => new Date(b.start) - new Date(a.start))
+        .slice(0, 100);
+      list.innerHTML = candidates.length
+        ? ''
+        : '<div style="color:var(--text-muted);font-size:0.85rem;padding:8px 0;">No events found.</div>';
+      candidates.forEach(ev => {
+        const row = document.createElement('div');
+        row.className = 'person-row'; row.style.cursor = 'pointer';
+        const d = new Date(ev.start).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        row.innerHTML = `
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(ev.title||'(no title)')}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">${d} · ${ev.category||''}</div>
+          </div>`;
+        row.addEventListener('click', async () => {
+          await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:ev.id,title:ev.title,start:ev.start,end:ev.end,
+              category:ev.category,notes:ev.notes||'',person_id:_activePerson.id,
+              recur:ev.recur||'none',recur_end:ev.recur_end||null,
+              recur_config:ev.recur_config||null,is_backup:ev.is_backup||0})});
+          const eRes = await fetch('/api/events');
+          _allEvents = await eRes.json();
+          closeModal('linkEventModal');
+          if (_activePerson) renderPersonEventHistory(_activePerson);
+        });
+        list.appendChild(row);
+      });
+    }
+    document.getElementById('linkEventBtn')?.addEventListener('click', () => {
+      document.getElementById('linkEventSearch').value = '';
+      renderLinkEventList('');
+      openModal('linkEventModal');
+    });
+    document.getElementById('linkEventClose')?.addEventListener('click', () => closeModal('linkEventModal'));
+    document.getElementById('linkEventModalBackdrop')?.addEventListener('click', () => closeModal('linkEventModal'));
+    document.getElementById('linkEventSearch')?.addEventListener('input', function() {
+      renderLinkEventList(this.value.toLowerCase());
+    });
+
     addPersonForm.addEventListener('submit', async function(e){
       e.preventDefault();
       const nameVal=addPersonForm.name.value.trim(); if (!nameVal) return;
@@ -815,10 +1220,8 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    // Approved posts feed
-    let postsVisible = 5;
+    // Approved posts feed (max 5, no load-more)
     async function loadPosts(resetCount=false) {
-      if (resetCount) postsVisible = 5;
       const sort   = document.getElementById('sortSelect')?.value||'newest';
       const filter = document.getElementById('filterSelect')?.value||'';
       let url = `/api/posts?sort=${sort}&status=approved`;
@@ -831,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', function () {
         container.innerHTML='<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem;">No posts yet.</div>'; return;
       }
       container.innerHTML='';
-      const visible = list.slice(0, postsVisible);
+      const visible = list.slice(0, 5);
       for (const p of visible) {
         const commRes = await fetch(`/api/comments?post_id=${p.id}`);
         const comments = await commRes.json();
@@ -860,13 +1263,6 @@ document.addEventListener('DOMContentLoaded', function () {
           input.value=''; loadPosts();
         });
         container.appendChild(div);
-      }
-      if (list.length > postsVisible) {
-        const btn=document.createElement('div');
-        btn.style.cssText='padding:12px 16px;text-align:center;border-top:1px solid var(--border);';
-        btn.innerHTML=`<button class="btn btn-secondary btn-sm">Load more (${list.length - postsVisible} remaining)</button>`;
-        btn.querySelector('button').addEventListener('click',()=>{ postsVisible+=5; loadPosts(); });
-        container.appendChild(btn);
       }
     }
 

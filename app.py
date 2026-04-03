@@ -14,22 +14,24 @@ DEFAULT_GOALS = [
     ('Temple Attendance', '🏛️', '#EEF2FF', 'counter', '',       1, 'monthly', 'daily,weekly,monthly,bimonthly', 0, 'Times attended'),
     ('Scripture Study',   '📖', '#F0FDF4', 'counter', 'study',  7, 'weekly',  '',                               1, 'Days studied this week'),
     ('Church Attendance', '⛪', '#FFF7ED', 'toggle',  '',       1, 'weekly',  '',                               2, 'Did you attend church this Sunday?'),
-    ('Dates',             '💛', '#FFF1F2', 'counter', 'dates',  2, 'weekly',  'weekly,monthly',                 3, 'Dates this week'),
+    ('Dates',             '💛', '#FFF1F2', 'counter', 'social', 2, 'weekly',  'weekly,monthly',                 3, 'Dates this week'),
     ('Ministering',       '🤝', '#F0FDF4', 'toggle',  'meeting',1, 'monthly', '',                               4, 'Completed ministering this month?'),
     ('Inviting Friends',  '💌', '#F5F3FF', 'counter', 'contact',3, 'weekly',  'daily,weekly,monthly',           5, 'Invitations sent'),
 ]
 
 DEFAULT_CATEGORIES = [
     # key, name, color, emoji, sort_order
-    ('study',   'Study',   '#7C3AED', '', 0),
-    ('class',   'Class',   '#2563EB', '', 1),
-    ('work',    'Work',    '#DC2626', '', 2),
-    ('dates',   'Dates',   '#D97706', '', 3),
-    ('contact', 'Contact', '#16A34A', '', 4),
-    ('meeting', 'Meeting', '#DB2777', '', 5),
-    ('eating',  'Eating',  '#92400E', '', 6),
-    ('travel',  'Travel',  '#0EA5E9', '', 7),
-    ('other',   'Other',   '#D1D5DB', '', 8),
+    ('contact', 'Contact',      '#16A34A', '', 0),
+    ('class',   'Class',        '#CA8A04', '', 1),
+    ('social',  'Social Outing','#9333EA', '', 2),
+    ('meeting', 'Meeting',      '#F472B6', '', 3),
+    ('study',   'Study / Plan', '#7C3AED', '', 4),
+    ('service', 'Service',      '#1D4ED8', '', 5),
+    ('wedding', 'Wedding',      '#0284C7', '', 6),
+    ('travel',  'Travel',       '#9A3412', '', 7),
+    ('meal',    'Meal',         '#B45309', '', 8),
+    ('task',    'Task',         '#65A30D', '', 9),
+    ('other',   'Other',        '#6B7280', '', 10),
 ]
 
 DEFAULT_DOT_SETTINGS = {
@@ -77,11 +79,14 @@ def migrate_db():
     for col, typedef in [('recur', "TEXT DEFAULT 'none'"), ('recur_end', 'TEXT'),
                           ('person_id', 'INTEGER'), ('imported', 'INTEGER DEFAULT 0'),
                           ('is_backup', 'INTEGER DEFAULT 0'),
-                          ('recur_config', 'TEXT'), ('recur_exceptions', 'TEXT')]:
+                          ('recur_config', 'TEXT'), ('recur_exceptions', 'TEXT'),
+                          ('completed', 'INTEGER DEFAULT 0')]:
         try: c.execute(f'ALTER TABLE events ADD COLUMN {col} {typedef}')
         except Exception: pass
     # people extra columns
-    for col, typedef in [('met_where', 'TEXT'), ('met_when', 'TEXT')]:
+    for col, typedef in [('met_where', 'TEXT'), ('met_when', 'TEXT'),
+                         ('phone', 'TEXT'), ('address', 'TEXT'),
+                         ('birthday', 'TEXT'), ('instagram', 'TEXT')]:
         try: c.execute(f'ALTER TABLE people ADD COLUMN {col} {typedef}')
         except Exception: pass
     # posts extra columns
@@ -114,6 +119,10 @@ def migrate_db():
     for col, typedef in [('emoji', "TEXT DEFAULT ''"), ('sort_order', 'INTEGER DEFAULT 0')]:
         try: c.execute(f'ALTER TABLE categories ADD COLUMN {col} {typedef}')
         except Exception: pass
+    # dot_history table
+    c.execute('''CREATE TABLE IF NOT EXISTS dot_history (
+        id INTEGER PRIMARY KEY, user TEXT, person_id INTEGER,
+        from_dot TEXT, to_dot TEXT, changed_at TEXT)''')
     # dot_settings table
     c.execute('''CREATE TABLE IF NOT EXISTS dot_settings (
         id INTEGER PRIMARY KEY, user TEXT, key TEXT, value TEXT,
@@ -122,6 +131,12 @@ def migrate_db():
     c.execute('''CREATE TABLE IF NOT EXISTS comments (
         id INTEGER PRIMARY KEY, post_id INTEGER, user TEXT,
         text TEXT, created TEXT)''')
+    # rename old category keys to new ones (data migration)
+    for old_key, new_key in [('dates', 'social'), ('eating', 'meal'), ('work', 'service')]:
+        try: c.execute('UPDATE events SET category=? WHERE category=?', (new_key, old_key))
+        except Exception: pass
+        try: c.execute('UPDATE categories SET key=? WHERE key=?', (new_key, old_key))
+        except Exception: pass
     conn.commit()
     conn.close()
 
@@ -160,14 +175,15 @@ def seed_goals(user):
 def seed_categories(user):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    existing = {r[0] for r in c.execute('SELECT key FROM categories WHERE user=?', (user,)).fetchall()}
     for row in DEFAULT_CATEGORIES:
         key, name, color, emoji, so = row
-        if key not in existing:
-            c.execute(
-                'INSERT INTO categories(user,key,name,color,emoji,sort_order) VALUES(?,?,?,?,?,?)',
-                (user, key, name, color, emoji, so)
-            )
+        existing = c.execute('SELECT id FROM categories WHERE user=? AND key=?', (user, key)).fetchone()
+        if existing:
+            c.execute('UPDATE categories SET name=?,color=?,sort_order=? WHERE user=? AND key=?',
+                      (name, color, so, user, key))
+        else:
+            c.execute('INSERT INTO categories(user,key,name,color,emoji,sort_order) VALUES(?,?,?,?,?,?)',
+                      (user, key, name, color, emoji, so))
     conn.commit()
     conn.close()
 
@@ -386,19 +402,20 @@ def api_events():
         person_id    = data.get('person_id') or None
         is_backup    = 1 if data.get('is_backup') else 0
         recur_config = data.get('recur_config') or None
+        completed    = 1 if data.get('completed') else 0
         if eid:
             db_query(
-                'UPDATE events SET title=?,start=?,end=?,category=?,notes=?,recur=?,recur_end=?,person_id=?,is_backup=?,recur_config=? WHERE id=? AND user=?',
+                'UPDATE events SET title=?,start=?,end=?,category=?,notes=?,recur=?,recur_end=?,person_id=?,is_backup=?,recur_config=?,completed=? WHERE id=? AND user=?',
                 (data.get('title'), data.get('start'), data.get('end'), data.get('category'),
-                 data.get('notes'), recur, recur_end, person_id, is_backup, recur_config, eid, user)
+                 data.get('notes'), recur, recur_end, person_id, is_backup, recur_config, completed, eid, user)
             )
             return jsonify({'status': 'updated'})
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute(
-            'INSERT INTO events(user,title,start,end,category,notes,recur,recur_end,person_id,is_backup,recur_config) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO events(user,title,start,end,category,notes,recur,recur_end,person_id,is_backup,recur_config,completed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
             (user, data.get('title'), data.get('start'), data.get('end'), data.get('category'),
-             data.get('notes'), recur, recur_end, person_id, is_backup, recur_config)
+             data.get('notes'), recur, recur_end, person_id, is_backup, recur_config, completed)
         )
         last_id = cur.lastrowid
         conn.commit()
@@ -419,15 +436,22 @@ def api_people():
     data = request.json
     pid  = data.get('id')
     if pid:
-        db_query('UPDATE people SET dot=?,notes=?,met_where=?,met_when=? WHERE id=? AND user=?',
-                 (data.get('dot','yellow'), data.get('notes',''),
-                  data.get('met_where',''), data.get('met_when',''), pid, user))
+        old = db_query('SELECT dot FROM people WHERE id=? AND user=?', (pid, user), one=True)
+        new_dot = data.get('dot', 'yellow')
+        if old and old['dot'] != new_dot:
+            db_query('INSERT INTO dot_history(user,person_id,from_dot,to_dot,changed_at) VALUES(?,?,?,?,?)',
+                     (user, pid, old['dot'], new_dot, datetime.utcnow().isoformat()))
+        db_query('UPDATE people SET dot=?,notes=?,met_where=?,met_when=?,phone=?,address=?,birthday=?,instagram=? WHERE id=? AND user=?',
+                 (new_dot, data.get('notes',''), data.get('met_where',''), data.get('met_when',''),
+                  data.get('phone',''), data.get('address',''), data.get('birthday',''),
+                  data.get('instagram',''), pid, user))
         return jsonify({'status': 'updated'})
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('INSERT INTO people(user,name,dot,notes,met_where,met_when) VALUES(?,?,?,?,?,?)',
+    cur.execute('INSERT INTO people(user,name,dot,notes,met_where,met_when,phone,address,birthday,instagram) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (user, data.get('name'), data.get('dot','yellow'), data.get('notes',''),
-                 data.get('met_where',''), data.get('met_when','')))
+                 data.get('met_where',''), data.get('met_when',''),
+                 data.get('phone',''), data.get('address',''), data.get('birthday',''), data.get('instagram','')))
     new_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -437,6 +461,12 @@ def api_people():
 def api_person_delete(pid):
     db_query('DELETE FROM people WHERE id=? AND user=?', (pid, require_user()))
     return jsonify({'status': 'deleted'})
+
+@app.route('/api/people/<int:pid>/dot-history', methods=['GET'])
+def api_person_dot_history(pid):
+    user = require_user()
+    rows = db_query('SELECT * FROM dot_history WHERE user=? AND person_id=? ORDER BY changed_at ASC', (user, pid))
+    return jsonify([dict(r) for r in rows])
 
 UPLOAD_DIR = APP_DIR / 'static' / 'uploads'
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -560,6 +590,31 @@ def parse_ical_date(value, params=None, tz_offset_min=0):
     except Exception:
         return None, False
 
+def _apply_duration(start_iso, dur_str, is_allday):
+    """Apply an iCal DURATION string to a start ISO date/datetime, return end ISO string."""
+    import re as _re
+    m = _re.match(r'P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?', dur_str or '')
+    if not m:
+        return None
+    weeks = int(m.group(1) or 0)
+    days  = int(m.group(2) or 0)
+    hours = int(m.group(3) or 0)
+    mins  = int(m.group(4) or 0)
+    secs  = int(m.group(5) or 0)
+    total_days = weeks * 7 + days
+    total_secs = hours * 3600 + mins * 60 + secs
+    try:
+        if is_allday:
+            dt = datetime.strptime(start_iso[:10], '%Y-%m-%d')
+            dt += timedelta(days=total_days)
+            return dt.strftime('%Y-%m-%d')
+        else:
+            dt = datetime.fromisoformat(start_iso)
+            dt += timedelta(days=total_days, seconds=total_secs)
+            return dt.isoformat()
+    except Exception:
+        return None
+
 def parse_rrule(rrule_str):
     """Extract (recur_type, recur_end, recur_config_json) from RRULE string."""
     import json as _json
@@ -625,6 +680,8 @@ def api_ical_preview():
         end_params   = ev.get('DTEND_PARAMS', {})
         start, is_allday = parse_ical_date(ev.get('DTSTART', ''), start_params, tz_offset)
         end, _           = parse_ical_date(ev.get('DTEND', ''),   end_params,   tz_offset)
+        if not end and ev.get('DURATION'):
+            end = _apply_duration(start, ev['DURATION'], is_allday)
         if not start:
             continue
 
@@ -805,4 +862,4 @@ def api_events_delete_all():
     return jsonify({'status': 'ok', 'deleted': count})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
