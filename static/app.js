@@ -156,7 +156,7 @@ async function autoDotCheckAll() {
   const updates = [];
   people.forEach(person => {
     const pastDates = events.filter(ev =>
-      String(ev.person_id)===String(person.id) && ev.category==='social' && ev.start && new Date(ev.start)<=now
+      (ev.person_ids||[]).includes(person.id) && ev.category==='social' && ev.start && new Date(ev.start)<=now
     ).length;
     let newDot = person.dot;
     if (pastDates >= datesForGreen && person.dot==='yellow') newDot = 'green';
@@ -181,7 +181,7 @@ async function autoDotCheck(personId) {
   const person = people.find(p => String(p.id)===String(personId));
   if (!person) return;
   const pastDates = events.filter(ev =>
-    String(ev.person_id)===String(personId) && ev.category==='social' && ev.start && new Date(ev.start)<=now
+    (ev.person_ids||[]).includes(Number(personId)) && ev.category==='social' && ev.start && new Date(ev.start)<=now
   ).length;
   let newDot = person.dot;
   if (pastDates >= datesForGreen && person.dot==='yellow') newDot = 'green';
@@ -202,134 +202,281 @@ document.addEventListener('DOMContentLoaded', function () {
     let allCats = [];
     let calInstance = null;
 
-    function populatePersonSelect(selectedId='') {
-      const sel = document.getElementById('personSelect');
-      if (!sel) return;
-      fetch('/api/people').then(r=>r.json()).then(people => {
-        sel.innerHTML = '<option value="">— no one attached —</option>';
-        people.forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.id; opt.textContent = p.name;
-          if (String(p.id)===String(selectedId)) opt.selected = true;
-          sel.appendChild(opt);
+    // ── Event Sheet state ─────────────────────────────────────────────────────
+    let _esEventId = null;
+    let _esCategory = null;
+    let _esPersonIds = [];
+    let _esEditScope = 'all';
+    let _esInstanceDate = null;
+    let _esOriginalId = null;
+    let _esMasterStartDate = null;
+    let _esMasterEndDate = null;
+    let _esPeople = [];
+
+    function toTimeInputStr(d) {
+      if (!d) return '';
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+    function fmtTimePretty(timeStr24) {
+      if (!timeStr24) return '';
+      const [h, m] = timeStr24.split(':').map(Number);
+      const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 || 12;
+      return `${h12}:${String(m).padStart(2,'0')} ${ap}`;
+    }
+    function updateEsTimeDisplay() {
+      const d = document.getElementById('esDateInput').value;
+      const s = document.getElementById('esStartTime').value;
+      const e = document.getElementById('esEndTime').value;
+      let txt = '';
+      if (d) { const dt = new Date(d+'T12:00:00'); txt = dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+      if (s) txt += (txt ? ' · ' : '') + fmtTimePretty(s);
+      if (e) txt += ' – ' + fmtTimePretty(e);
+      const el = document.getElementById('esTimeDisplay');
+      el.textContent = txt || 'Set time…';
+      el.classList.toggle('es-muted', !txt);
+    }
+
+    function buildEsCatStrip(selectedKey) {
+      const strip = document.getElementById('esCatStrip');
+      if (!strip) return;
+      strip.innerHTML = '';
+      allCats.forEach(cat => {
+        const chip = document.createElement('div');
+        chip.className = 'es-cat-chip' + (cat.key === selectedKey ? ' selected' : '');
+        chip.style.background = categoryColorMap[cat.key] || '#6B7280';
+        chip.innerHTML = `${cat.emoji||'📅'} ${escapeHtml(cat.name)}`;
+        chip.addEventListener('click', () => {
+          _esCategory = cat.key;
+          document.querySelectorAll('.es-cat-chip').forEach(c => c.classList.remove('selected'));
+          chip.classList.add('selected');
+          // Show/hide task complete row
+          const tcRow = document.getElementById('esTaskCompleteRow');
+          if (tcRow) tcRow.style.display = cat.key === 'task' ? 'flex' : 'none';
         });
+        strip.appendChild(chip);
+      });
+      setTimeout(() => {
+        const sel = strip.querySelector('.selected');
+        if (sel) sel.scrollIntoView({inline:'center', block:'nearest', behavior:'smooth'});
+      }, 80);
+    }
+
+    function updateEsPersonDisplay() {
+      const pd = document.getElementById('esPersonDisplay');
+      if (!pd) return;
+      if (!_esPersonIds.length) {
+        pd.textContent = 'No one attached'; pd.classList.add('es-muted');
+      } else if (_esPersonIds.length === 1) {
+        const p = _esPeople.find(x => x.id === _esPersonIds[0]);
+        pd.textContent = p ? p.name : '1 person'; pd.classList.remove('es-muted');
+      } else {
+        pd.textContent = `${_esPersonIds.length} people`; pd.classList.remove('es-muted');
+      }
+    }
+
+    async function buildEsPersonChips(selectedIds) {
+      const container = document.getElementById('esPersonChips');
+      if (!container) return;
+      if (!_esPeople.length) {
+        const res = await fetch('/api/people');
+        _esPeople = await res.json();
+      }
+      _esPersonIds = (selectedIds || []).map(Number).filter(Boolean);
+      container.innerHTML = '';
+      _esPeople.forEach(p => {
+        const chip = document.createElement('div');
+        const isSelected = _esPersonIds.includes(p.id);
+        chip.className = 'es-person-chip' + (isSelected ? ' selected' : '');
+        chip.innerHTML = `<span class="es-dot" style="background:${DOT_COLOR[p.dot]||'#EAB308'};"></span>${escapeHtml(p.name)}`;
+        chip.addEventListener('click', () => {
+          if (_esPersonIds.includes(p.id)) {
+            _esPersonIds = _esPersonIds.filter(id => id !== p.id);
+            chip.classList.remove('selected');
+          } else {
+            _esPersonIds.push(p.id);
+            chip.classList.add('selected');
+          }
+          updateEsPersonDisplay();
+        });
+        container.appendChild(chip);
       });
     }
 
-    function openEventModal() { openModal('eventModal'); }
-
-    // Close modal
-    ['modalBackdrop','modalClose','closeEvent'].forEach(id =>
-      document.getElementById(id)?.addEventListener('click', ()=>closeModal('eventModal'))
-    );
-
-    // Recurrence toggle
-    // ── Recurrence UI helpers ─────────────────────────────────────────────────
-    let _editScope = 'all';        // 'all' | 'one'
-    let _editInstanceDate = null;  // ISO date string of clicked instance
-    let _editOriginalId = null;    // master event id for recurring
-    let _masterStartDate = null;   // YYYY-MM-DD of master event's original start
-    let _masterEndDate   = null;   // YYYY-MM-DD of master event's original end
-
-    function updateRecurUI(recurVal, startDate) {
-      document.getElementById('recurEndWrap').style.display = recurVal==='none' ? 'none' : 'block';
-      document.getElementById('recurWeekDaysWrap').style.display = recurVal==='weekly' ? 'block' : 'none';
-      document.getElementById('recurMonthlyWrap').style.display = recurVal==='monthly' ? 'block' : 'none';
-      if (recurVal==='weekly' && startDate) {
-        const checked = document.querySelectorAll('#recurWeekDaysWrap input[name="rday"]:checked');
-        if (checked.length===0) {
-          const d = document.querySelector(`#recurWeekDaysWrap input[value="${new Date(startDate).getDay()}"]`);
+    function updateEsRecurUI(val, startDate) {
+      document.getElementById('esRecurEndRow').style.display  = val !== 'none' ? 'flex' : 'none';
+      document.getElementById('esRecurDaysRow').style.display = val === 'weekly' ? 'block' : 'none';
+      document.getElementById('esRecurMonthlyRow').style.display = val === 'monthly' ? 'flex' : 'none';
+      if (val === 'weekly' && startDate) {
+        const checked = document.querySelectorAll('input[name="esRday"]:checked');
+        if (!checked.length) {
+          const d = document.querySelector(`input[name="esRday"][value="${new Date(startDate).getDay()}"]`);
           if (d) d.checked = true;
         }
       }
-      if (recurVal==='monthly') updateMonthlyDesc(startDate ? new Date(startDate) : null);
     }
 
-    function updateMonthlyDesc(date) {
-      const desc = document.getElementById('recurMonthlyDesc'); if (!desc) return;
-      const type = document.getElementById('recurMonthlyType')?.value||'date';
-      if (!date) { desc.textContent=''; return; }
-      if (type==='date') {
-        const d=date.getDate(), s=d===1||d===21||d===31?'st':d===2||d===22?'nd':d===3||d===23?'rd':'th';
-        desc.textContent=`Every ${d}${s} of the month`;
-      } else {
-        const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        const n=Math.ceil(date.getDate()/7);
-        const nth=n===1?'1st':n===2?'2nd':n===3?'3rd':n===4?'4th':'last';
-        desc.textContent=`Every ${nth} ${days[date.getDay()]} of the month`;
+    function buildEsRecurConfig(recur, startDate) {
+      if (recur === 'weekly') {
+        const days = [];
+        document.querySelectorAll('input[name="esRday"]:checked').forEach(cb => days.push(parseInt(cb.value)));
+        return days.length ? JSON.stringify({days: days.sort((a,b)=>a-b)}) : null;
       }
-    }
-
-    function buildRecurConfig(recur, startDate) {
-      if (recur==='weekly') {
-        const days=[];
-        document.querySelectorAll('#recurWeekDaysWrap input[name="rday"]:checked').forEach(cb=>days.push(parseInt(cb.value)));
-        return days.length ? JSON.stringify({days:days.sort((a,b)=>a-b)}) : null;
-      }
-      if (recur==='monthly') {
-        const type=document.getElementById('recurMonthlyType')?.value||'date';
-        if (type==='weekday' && startDate) {
-          const d=new Date(startDate);
-          return JSON.stringify({type:'weekday',n:Math.ceil(d.getDate()/7),day:d.getDay()});
+      if (recur === 'monthly') {
+        const type = document.getElementById('esRecurMonthlyType')?.value || 'date';
+        if (type === 'weekday' && startDate) {
+          const d = new Date(startDate);
+          return JSON.stringify({type:'weekday', n:Math.ceil(d.getDate()/7), day:d.getDay()});
         }
         return JSON.stringify({type:'date'});
       }
       return null;
     }
 
-    document.getElementById('recurSelect')?.addEventListener('change', function() {
-      const startDate = document.getElementById('eventForm')?.start_date?.value;
-      updateRecurUI(this.value, startDate ? startDate+'T12:00:00' : null);
-    });
-    document.getElementById('recurMonthlyType')?.addEventListener('change', function(){
-      const startDate = document.getElementById('eventForm')?.start_date?.value;
-      updateMonthlyDesc(startDate ? new Date(startDate+'T12:00:00') : null);
-    });
+    function openEventSheet(opts={}) {
+      // opts: { start, end, id, title, notes, category, recur, recur_end, recur_config,
+      //         person_id, is_backup, completed, isRecurring, instanceDate, originalId,
+      //         masterStart, masterEnd }
+      _esEventId       = opts.id || null;
+      _esCategory      = opts.category || (allCats[0]?.key || 'contact');
+      _esPersonIds     = (opts.person_ids || (opts.person_id ? [opts.person_id] : [])).map(Number).filter(Boolean);
+      _esEditScope     = 'all';
+      _esInstanceDate  = opts.instanceDate || null;
+      _esOriginalId    = opts.originalId || opts.id || null;
+      _esMasterStartDate = opts.masterStart ? opts.masterStart.slice(0,10) : null;
+      _esMasterEndDate   = opts.masterEnd   ? opts.masterEnd.slice(0,10)   : null;
 
-    // Scope bar buttons
-    document.getElementById('scopeOneBtn')?.addEventListener('click', function(){
-      _editScope='one';
-      this.className='btn btn-primary btn-sm'; this.style.fontSize='0.73rem';
-      const all=document.getElementById('scopeAllBtn');
-      all.className='btn btn-secondary btn-sm'; all.style.fontSize='0.73rem';
-    });
-    document.getElementById('scopeAllBtn')?.addEventListener('click', function(){
-      _editScope='all';
-      this.className='btn btn-primary btn-sm'; this.style.fontSize='0.73rem';
-      const one=document.getElementById('scopeOneBtn');
-      one.className='btn btn-secondary btn-sm'; one.style.fontSize='0.73rem';
-    });
+      // Title
+      document.getElementById('esTitle').value = opts.title || '';
 
-    function resetForm(date) {
-      const form = document.getElementById('eventForm');
-      form.id.value=''; form.title.value=''; form.notes.value='';
-      const ds = toDateStr(date); form.start_date.value=ds; form.end_date.value=ds;
-      setTimeFields(form, date);
-      setTimeFields(form, new Date(date.getTime()+3600000), 'end');
-      document.getElementById('recurSelect').value='none';
-      form.recur_end.value='';
-      document.querySelectorAll('#recurWeekDaysWrap input[name="rday"]').forEach(cb=>cb.checked=false);
-      updateRecurUI('none', null);
-      document.getElementById('deleteEvent').style.display='none';
-      document.getElementById('deleteOneEvent').style.display='none';
-      document.getElementById('recurScopeBar').style.display='none';
-      document.getElementById('isBackupCheck').checked=false;
-      const tcw=document.getElementById('taskCompleteWrap'); if(tcw){tcw.style.display='none'; document.getElementById('taskCompleteCheck').checked=false;}
-      document.getElementById('modalHeading').textContent='New Event';
-      _editScope='all'; _editInstanceDate=null; _editOriginalId=null; _masterStartDate=null; _masterEndDate=null;
-      populatePersonSelect('');
-    }
+      // Category strip
+      buildEsCatStrip(_esCategory);
 
-    document.getElementById('fabAdd')?.addEventListener('click', () => { resetForm(new Date()); openEventModal(); });
+      // Time & date
+      const startDate = opts.start ? new Date(opts.start) : new Date();
+      const endDate   = opts.end   ? new Date(opts.end)   : new Date(startDate.getTime() + 3600000);
+      document.getElementById('esDateInput').value  = toDateStr(startDate);
+      document.getElementById('esStartTime').value  = toTimeInputStr(startDate);
+      document.getElementById('esEndTime').value    = toTimeInputStr(endDate);
+      updateEsTimeDisplay();
 
-    function updateLegend(cats) {
-      // legend removed from planner — no-op
-      return; cats.forEach(c => {
-        const span = document.createElement('span');
-        span.innerHTML = `<span class="dot" style="background:${c.color};"></span>${escapeHtml(c.emoji+' '+c.name)}`;
-        legend.appendChild(span);
+      // Person chips (multi-select)
+      buildEsPersonChips(_esPersonIds);
+      updateEsPersonDisplay();
+
+      // Notes
+      document.getElementById('esNotesInput').value = opts.notes || '';
+      const np = document.getElementById('esNotesPreview');
+      np.textContent = opts.notes || 'Add notes…';
+      np.classList.toggle('es-muted', !opts.notes);
+
+      // Recurrence
+      const rSel = document.getElementById('esRecurSelect');
+      rSel.value = opts.recur || 'none';
+      document.getElementById('esRecurEnd').value = opts.recur_end || '';
+      document.querySelectorAll('input[name="esRday"]').forEach(cb => cb.checked = false);
+      let cfg = {}; try { cfg = JSON.parse(opts.recur_config || '{}'); } catch {}
+      if (opts.recur === 'weekly' && cfg.days) {
+        document.querySelectorAll('input[name="esRday"]').forEach(cb => { cb.checked = cfg.days.includes(parseInt(cb.value)); });
+      }
+      if (opts.recur === 'monthly') {
+        const ms = document.getElementById('esRecurMonthlyType'); if (ms) ms.value = cfg.type || 'date';
+      }
+      updateEsRecurUI(opts.recur || 'none', opts.start);
+
+      // Backup & task
+      document.getElementById('esBackupToggle').checked = !!opts.is_backup;
+      const tcRow = document.getElementById('esTaskCompleteRow');
+      if (tcRow) tcRow.style.display = _esCategory === 'task' ? 'flex' : 'none';
+      document.getElementById('esTaskComplete').checked = !!opts.completed;
+
+      // Delete buttons
+      const isNew = !opts.id;
+      document.getElementById('esDeleteAll').style.display = isNew ? 'none' : 'inline-flex';
+      document.getElementById('esDeleteOne').style.display = (isNew || !opts.isRecurring) ? 'none' : 'inline-flex';
+
+      // Scope bar
+      const scopeBar = document.getElementById('esScopeBar');
+      scopeBar.style.display = opts.isRecurring ? 'flex' : 'none';
+      document.getElementById('esScopeAll').classList.add('active');
+      document.getElementById('esScopeOne').classList.remove('active');
+
+      // Collapse all panels
+      ['esTimePanel','esPersonPanel','esNotesPanel','esMorePanel'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
       });
+      document.querySelectorAll('.es-chevron').forEach(c => c.classList.remove('open'));
+
+      // Open sheet
+      document.getElementById('eventSheet').classList.add('open');
+      document.getElementById('esBackdrop').style.display = 'block';
+      setTimeout(() => document.getElementById('esTitle').focus(), 150);
     }
+
+    function closeEventSheet() {
+      document.getElementById('eventSheet').classList.remove('open');
+      document.getElementById('esBackdrop').style.display = 'none';
+    }
+
+    document.getElementById('esCancel')?.addEventListener('click', closeEventSheet);
+    document.getElementById('esBackdrop')?.addEventListener('click', closeEventSheet);
+
+    // Scope buttons
+    document.getElementById('esScopeOne')?.addEventListener('click', function() {
+      _esEditScope = 'one';
+      this.classList.add('active'); document.getElementById('esScopeAll').classList.remove('active');
+    });
+    document.getElementById('esScopeAll')?.addEventListener('click', function() {
+      _esEditScope = 'all';
+      this.classList.add('active'); document.getElementById('esScopeOne').classList.remove('active');
+    });
+
+    // Expandable rows
+    function toggleEsPanel(rowId, panelId) {
+      const row   = document.getElementById(rowId);
+      const panel = document.getElementById(panelId);
+      const chevron = row?.querySelector('.es-chevron');
+      const isOpen = panel?.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : '';
+      if (chevron) chevron.classList.toggle('open', !isOpen);
+    }
+    document.getElementById('esTimeRow')?.addEventListener('click',   () => toggleEsPanel('esTimeRow',   'esTimePanel'));
+    document.getElementById('esPersonRow')?.addEventListener('click', () => toggleEsPanel('esPersonRow', 'esPersonPanel'));
+    document.getElementById('esNotesRow')?.addEventListener('click',  () => toggleEsPanel('esNotesRow',  'esNotesPanel'));
+    document.getElementById('esMoreToggle')?.addEventListener('click', () => {
+      const panel = document.getElementById('esMorePanel');
+      const chevron = document.getElementById('esMoreChevron');
+      const isOpen = panel?.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'block';
+      if (chevron) chevron.classList.toggle('open', !isOpen);
+    });
+
+    // Auto-update time display when inputs change
+    ['esStartTime','esEndTime','esDateInput'].forEach(id => {
+      document.getElementById(id)?.addEventListener('change', () => {
+        updateEsTimeDisplay();
+        updateEsRecurUI(document.getElementById('esRecurSelect').value,
+          document.getElementById('esDateInput').value ? document.getElementById('esDateInput').value + 'T' + (document.getElementById('esStartTime').value || '12:00') : null);
+      });
+    });
+
+    // Auto-update notes preview
+    document.getElementById('esNotesInput')?.addEventListener('input', function() {
+      const np = document.getElementById('esNotesPreview');
+      np.textContent = this.value || 'Add notes…';
+      np.classList.toggle('es-muted', !this.value);
+    });
+
+    // Recur select
+    document.getElementById('esRecurSelect')?.addEventListener('change', function() {
+      updateEsRecurUI(this.value, document.getElementById('esDateInput').value);
+    });
+
+    // FAB
+    document.getElementById('fabAdd')?.addEventListener('click', () => {
+      openEventSheet({ start: new Date().toISOString() });
+    });
+
+    function updateLegend() { /* no-op */ }
 
     async function initCalendar() {
       const catRes = await fetch('/api/categories');
@@ -338,92 +485,51 @@ document.addEventListener('DOMContentLoaded', function () {
       allCats.forEach(c => { categoryColorMap[c.key] = c.color; });
       updateLegend(allCats);
 
-      // Populate category select in modal
-      const catSel = document.getElementById('eventCategorySelect');
-      if (catSel) {
-        catSel.innerHTML = '';
-        allCats.forEach(c => {
-          const opt = document.createElement('option');
-          opt.value = c.key;
-          opt.textContent = `${c.emoji||''} ${c.name}`.trim();
-          catSel.appendChild(opt);
-        });
-        catSel.addEventListener('change', function() {
-          const tw = document.getElementById('taskCompleteWrap');
-          if (tw) tw.style.display = this.value === 'task' ? 'flex' : 'none';
-        });
-      }
+      // Category chips are built dynamically in openEventSheet / buildEsCatStrip
 
       const savedView = localStorage.getItem('calView') || (window.innerWidth < 700 ? 'timeGridDay' : 'timeGridWeek');
       calInstance = new FullCalendar.Calendar(calendarEl, {
         initialView: savedView,
         headerToolbar: { left:'prev,next today', center:'title', right:'timeGridDay,timeGridWeek,dayGridMonth,listWeek' },
         navLinks: true, nowIndicator: true, selectable: true, editable: true,
-        selectMirror: true, height: 'auto',
+        selectMirror: true, height: 'auto', slotEventOverlap: false,
+        eventOrder: function(a, b) { return (a.extendedProps.is_backup||0) - (b.extendedProps.is_backup||0); },
         viewDidMount: function(info) { localStorage.setItem('calView', info.view.type); },
+        eventDidMount: function(info) {
+          if (info.event.extendedProps.is_backup) {
+            info.el.classList.add('fc-backup');
+          }
+        },
 
         select: function(info) {
           if (window.innerWidth < 700) { openMobileSheet(info.start); return; }
-          resetForm(info.start);
-          const form = document.getElementById('eventForm');
-          form.start_date.value = toDateStr(info.start);
-          form.end_date.value   = toDateStr(info.start);
-          setTimeFields(form, info.start);
-          setTimeFields(form, info.end||new Date(info.start.getTime()+3600000),'end');
-          openEventModal();
+          openEventSheet({ start: info.start.toISOString(), end: info.end?.toISOString() });
         },
         dateClick: function(info) {
           if (window.innerWidth < 700) { openMobileSheet(info.date); return; }
-          resetForm(info.date);
-          openEventModal();
+          openEventSheet({ start: info.date.toISOString() });
         },
         eventClick: function(info) {
           const e = info.event; const p = e.extendedProps;
-          const isRecurring = p.recur && p.recur !== 'none';
-          const form = document.getElementById('eventForm');
-          _editOriginalId = p.originalId||e.id;
-          _editInstanceDate = p._instanceDate||null;
-          _editScope = 'all';
-          _masterStartDate = p.masterStart ? p.masterStart.slice(0,10) : null;
-          _masterEndDate   = p.masterEnd   ? p.masterEnd.slice(0,10)   : null;
-          form.id.value = _editOriginalId;
-          form.title.value = e.title;
-          form.notes.value = p.notes||'';
-          const catSel2 = document.getElementById('eventCategorySelect');
-          if (catSel2) catSel2.value = p.category||'study';
-          if (e.start) { form.start_date.value=toDateStr(e.start); setTimeFields(form,e.start); }
-          if (e.end)   { form.end_date.value=toDateStr(e.end);     setTimeFields(form,e.end,'end'); }
-          const rSel = document.getElementById('recurSelect');
-          if (rSel) rSel.value = p.recur||'none';
-          form.recur_end.value = p.recur_end||'';
-          // Populate recur_config UI
-          let cfg={}; try{cfg=JSON.parse(p.recur_config||'{}');}catch{}
-          if (p.recur==='weekly' && cfg.days) {
-            document.querySelectorAll('#recurWeekDaysWrap input[name="rday"]').forEach(cb=>{cb.checked=cfg.days.includes(parseInt(cb.value));});
-          }
-          if (p.recur==='monthly') {
-            const ms=document.getElementById('recurMonthlyType'); if(ms) ms.value=cfg.type||'date';
-          }
-          updateRecurUI(p.recur||'none', e.start);
-          populatePersonSelect(p.person_id||'');
-          document.getElementById('isBackupCheck').checked = !!p.is_backup;
-          // Task complete checkbox
-          const taskWrap = document.getElementById('taskCompleteWrap');
-          if (taskWrap) {
-            taskWrap.style.display = p.category === 'task' ? 'flex' : 'none';
-            document.getElementById('taskCompleteCheck').checked = !!p.completed;
-          }
-          // Scope bar
-          const scopeBar = document.getElementById('recurScopeBar');
-          scopeBar.style.display = isRecurring ? 'flex' : 'none';
-          if (isRecurring) {
-            document.getElementById('scopeAllBtn').className='btn btn-primary btn-sm'; document.getElementById('scopeAllBtn').style.fontSize='0.73rem';
-            document.getElementById('scopeOneBtn').className='btn btn-secondary btn-sm'; document.getElementById('scopeOneBtn').style.fontSize='0.73rem';
-          }
-          document.getElementById('deleteEvent').style.display='inline-flex';
-          document.getElementById('deleteOneEvent').style.display = isRecurring ? 'inline-flex' : 'none';
-          document.getElementById('modalHeading').textContent = isRecurring ? 'Edit Recurring Event' : 'Edit Event';
-          openEventModal();
+          openEventSheet({
+            id: p.originalId||e.id,
+            title: e.title,
+            start: e.start?.toISOString(),
+            end:   e.end?.toISOString(),
+            category:    p.category,
+            notes:       p.notes||'',
+            recur:       p.recur||'none',
+            recur_end:   p.recur_end||'',
+            recur_config:p.recur_config||'{}',
+            person_ids:  p.person_ids||[],
+            is_backup:   p.is_backup||0,
+            completed:   p.completed||0,
+            isRecurring: p.recur && p.recur !== 'none',
+            instanceDate:p._instanceDate||null,
+            originalId:  p.originalId||e.id,
+            masterStart: p.masterStart||null,
+            masterEnd:   p.masterEnd||null,
+          });
         },
         eventContent: function(arg) {
           const p = arg.event.extendedProps;
@@ -472,7 +578,8 @@ document.addEventListener('DOMContentLoaded', function () {
               classNames: e.is_backup ? ['backup-event'] : [],
               extendedProps: { notes:e.notes, category:e.category, recur:e.recur||'none',
                 recur_end:e.recur_end||'', recur_config:e.recur_config||'{}',
-                person_id:e.person_id||'', is_backup:e.is_backup||0, completed:e.completed||0,
+                person_ids:e.person_ids||[], person_id:e.person_id||null,
+                is_backup:e.is_backup||0, completed:e.completed||0,
                 _instanceDate:e._instanceDate||null, originalId:e._originalId||e.id,
                 masterStart:e._masterStart||null, masterEnd:e._masterEnd||null }
             })));
@@ -662,57 +769,55 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    // Save event
-    document.getElementById('saveEvent').addEventListener('click', async function() {
-      const form = document.getElementById('eventForm');
-      const rSel = document.getElementById('recurSelect');
-      const recur = (rSel && _editScope==='all') ? rSel.value : 'none';
-      const pSel = document.getElementById('personSelect');
-      const catSel2 = document.getElementById('eventCategorySelect');
-      // For 'all' scope on a recurring event, lock to master's original date (only allow time changes)
-      const startDatePart = (_editScope==='all' && _masterStartDate) ? _masterStartDate : form.start_date.value;
-      const endDatePart   = (_editScope==='all' && _masterEndDate)   ? _masterEndDate   : form.end_date.value;
-      const start = buildDatetime(startDatePart, form.start_hour.value, form.start_minute.value, form.start_ampm.value);
-      const end   = buildDatetime(endDatePart,   form.end_hour.value,   form.end_minute.value,   form.end_ampm.value) || null;
+    // Save event (new sheet)
+    document.getElementById('esSave')?.addEventListener('click', async function() {
+      const title = document.getElementById('esTitle').value.trim();
+      if (!title) { document.getElementById('esTitle').focus(); return; }
+      const dateVal  = document.getElementById('esDateInput').value;
+      const startVal = document.getElementById('esStartTime').value;
+      const endVal   = document.getElementById('esEndTime').value;
+      const recur    = _esEditScope === 'all' ? (document.getElementById('esRecurSelect').value || 'none') : 'none';
+      // For 'all' scope on recurring events, lock to master's original date
+      const startDatePart = (_esEditScope==='all' && _esMasterStartDate) ? _esMasterStartDate : (dateVal || toDateStr(new Date()));
+      const endDatePart   = (_esEditScope==='all' && _esMasterEndDate)   ? _esMasterEndDate   : (dateVal || toDateStr(new Date()));
+      const start = startVal ? `${startDatePart}T${startVal}:00` : null;
+      const end   = endVal   ? `${endDatePart}T${endVal}:00`     : null;
       const payload = {
-        // For 'one' scope: no id → creates new one-off event
-        id: _editScope==='one' ? '' : form.id.value,
-        title: form.title.value,
-        start: start,
-        end:   end,
-        category: catSel2 ? catSel2.value : (form.category?.value||'study'),
-        notes: form.notes.value,
-        recur: recur,
-        recur_end: (recur!=='none'&&form.recur_end.value) ? form.recur_end.value : null,
-        recur_config: buildRecurConfig(recur, start),
-        person_id: pSel ? (pSel.value||null) : null,
-        is_backup: document.getElementById('isBackupCheck')?.checked ? 1 : 0,
-        completed: document.getElementById('taskCompleteCheck')?.checked ? 1 : 0
+        id:          _esEditScope === 'one' ? '' : (_esEventId || ''),
+        title,
+        start:       start || `${startDatePart}T09:00:00`,
+        end:         end,
+        category:    _esCategory || 'other',
+        notes:       document.getElementById('esNotesInput').value,
+        recur,
+        recur_end:   (recur !== 'none' && document.getElementById('esRecurEnd').value) ? document.getElementById('esRecurEnd').value : null,
+        recur_config:buildEsRecurConfig(recur, start),
+        person_ids:  _esPersonIds,
+        is_backup:   document.getElementById('esBackupToggle').checked ? 1 : 0,
+        completed:   document.getElementById('esTaskComplete').checked ? 1 : 0,
       };
-      await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      // If editing just this occurrence, add exception to master so original series skips this date
-      if (_editScope==='one' && _editOriginalId && _editInstanceDate) {
-        await fetch(`/api/events/${_editOriginalId}/exception`,{method:'POST',
-          headers:{'Content-Type':'application/json'},body:JSON.stringify({date:_editInstanceDate})});
+      await fetch('/api/events', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      if (_esEditScope === 'one' && _esOriginalId && _esInstanceDate) {
+        await fetch(`/api/events/${_esOriginalId}/exception`, {method:'POST',
+          headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:_esInstanceDate})});
       }
       calInstance.refetchEvents();
-      closeModal('eventModal');
-      if (payload.person_id && payload.category==='dates') autoDotCheck(payload.person_id);
+      closeEventSheet();
+      if (payload.category === 'social') payload.person_ids.forEach(pid => autoDotCheck(pid));
     });
 
-    document.getElementById('deleteEvent').addEventListener('click', async function() {
-      const id = _editOriginalId || document.getElementById('eventForm').id.value;
-      if (!id) return;
-      if (!confirm('Delete all occurrences of this event?')) return;
-      await fetch('/api/events?id='+id,{method:'DELETE'});
-      calInstance.refetchEvents(); closeModal('eventModal');
+    document.getElementById('esDeleteAll')?.addEventListener('click', async function() {
+      const id = _esOriginalId || _esEventId;
+      if (!id || !confirm('Delete all occurrences of this event?')) return;
+      await fetch('/api/events?id='+id, {method:'DELETE'});
+      calInstance.refetchEvents(); closeEventSheet();
     });
 
-    document.getElementById('deleteOneEvent').addEventListener('click', async function() {
-      if (!_editOriginalId || !_editInstanceDate) return;
-      await fetch(`/api/events/${_editOriginalId}/exception`,{method:'POST',
-        headers:{'Content-Type':'application/json'},body:JSON.stringify({date:_editInstanceDate})});
-      calInstance.refetchEvents(); closeModal('eventModal');
+    document.getElementById('esDeleteOne')?.addEventListener('click', async function() {
+      if (!_esOriginalId || !_esInstanceDate) return;
+      await fetch(`/api/events/${_esOriginalId}/exception`, {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:_esInstanceDate})});
+      calInstance.refetchEvents(); closeEventSheet();
     });
 
     initCalendar();
@@ -890,7 +995,7 @@ document.addEventListener('DOMContentLoaded', function () {
           ]);
           // For each person find their most recent linked event
           const withActivity = people.map(p => {
-            const linked = events.filter(ev=>String(ev.person_id)===String(p.id)&&ev.start);
+            const linked = events.filter(ev=>(ev.person_ids||[]).includes(p.id)&&ev.start);
             const latest = linked.sort((a,b)=>new Date(b.start)-new Date(a.start))[0];
             return {...p, _latestEvent: latest||null};
           }).filter(p=>p._latestEvent).sort((a,b)=>new Date(b._latestEvent.start)-new Date(a._latestEvent.start)).slice(0,4);
@@ -927,10 +1032,11 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ─── People ────────────────────────────────────────────────────────────────
-  const addPersonForm = document.getElementById('addPersonForm');
-  if (addPersonForm) {
+  if (document.getElementById('peopleList')) {
     let _allPeople=[], _allEvents=[];
     let _activePerson=null;
+    let _profileInEditMode=false;
+    let _selectedDot='yellow';
 
     async function loadPeople() {
       await autoDotCheckAll();
@@ -949,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const now=new Date(); container.innerHTML='';
       _allPeople.forEach(p=>{
         const dotKey=p.dot||'yellow', color=DOT_COLOR[dotKey]||dotKey, label=DOT_LABEL[dotKey]||dotKey;
-        const dateCount=_allEvents.filter(ev=>String(ev.person_id)===String(p.id)&&ev.category==='social'&&ev.start&&new Date(ev.start)<=now).length;
+        const dateCount=_allEvents.filter(ev=>(ev.person_ids||[]).includes(p.id)&&ev.category==='social'&&ev.start&&new Date(ev.start)<=now).length;
         const metInfo=[p.met_where,p.met_when].filter(Boolean).join(' · ');
         const sub=[label,dateCount?`${dateCount} date${dateCount!==1?'s':''}`:'',metInfo].filter(Boolean).join(' · ');
         const row=document.createElement('div'); row.className='person-row';
@@ -965,29 +1071,101 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    function openPersonModal(p) {
-      _activePerson=p;
-      document.getElementById('personModalName').textContent=p.name;
-      document.getElementById('personDotEdit').value=p.dot||'yellow';
-      document.getElementById('personDotDisplay').style.background=DOT_COLOR[p.dot]||DOT_COLOR.yellow;
-      document.getElementById('personMetWhere').value=p.met_where||'';
-      document.getElementById('personMetWhen').value=p.met_when||'';
-      document.getElementById('personNotes').value=p.notes||'';
-      document.getElementById('personPhone').value=p.phone||'';
-      document.getElementById('personAddress').value=p.address||'';
-      document.getElementById('personBirthday').value=p.birthday||'';
-      document.getElementById('personInstagram').value=p.instagram||'';
-      document.getElementById('personDotEdit').onchange=function(){
-        document.getElementById('personDotDisplay').style.background=DOT_COLOR[this.value]||this.value;
+    const DOT_ORDER = ['yellow','green','lightblue','darkblue','purple','gray','red'];
+
+    function renderDotChips(selectedDot, readMode) {
+      _selectedDot = selectedDot || 'yellow';
+      const row = document.getElementById('personDotChips');
+      if (!row) return;
+      row.innerHTML = '';
+      DOT_ORDER.forEach(key => {
+        const chip = document.createElement('button');
+        chip.title = DOT_LABEL[key] || key;
+        chip.className = 'dot-chip' + (key === _selectedDot ? ' selected' : '');
+        chip.style.background = DOT_COLOR[key] || '#EAB308';
+        chip.addEventListener('click', async () => {
+          _selectedDot = key;
+          renderDotChips(key, _profileInEditMode ? false : true);
+          if (!_profileInEditMode && _activePerson && _activePerson.id) {
+            // Auto-save dot in read mode
+            await fetch('/api/people', {method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({..._activePerson, dot: key})});
+            _activePerson.dot = key;
+            loadPeople();
+          }
+        });
+        row.appendChild(chip);
+      });
+    }
+
+    function populateEditFields(p) {
+      document.getElementById('personNameInput').value = p.name || '';
+      document.getElementById('personMetWhere').value  = p.met_where || '';
+      document.getElementById('personMetWhen').value   = p.met_when || '';
+      document.getElementById('personPhone').value     = p.phone || '';
+      document.getElementById('personBirthday').value  = p.birthday || '';
+      document.getElementById('personAddress').value   = p.address || '';
+      document.getElementById('personInstagram').value = p.instagram || '';
+      document.getElementById('personNotes').value     = p.notes || '';
+    }
+
+    function renderProfileReadView(p) {
+      const show = (id, val) => {
+        const row = document.getElementById(id);
+        const valEl = document.getElementById(id+'-val');
+        if (val) { if(valEl) valEl.textContent = val; row.style.display = 'flex'; }
+        else { row.style.display = 'none'; }
       };
+      const met = [p.met_where, p.met_when].filter(Boolean).join(' · ');
+      show('prv-met',   met);
+      show('prv-phone', p.phone);
+      show('prv-bday',  p.birthday);
+      show('prv-addr',  p.address);
+      show('prv-ig',    p.instagram);
+      const notesRow = document.getElementById('prv-notes');
+      const notesVal = document.getElementById('prv-notes-val');
+      if (p.notes) { notesVal.textContent = p.notes; notesRow.style.display = ''; }
+      else { notesRow.style.display = 'none'; }
+      const hasAny = met || p.phone || p.birthday || p.address || p.instagram || p.notes;
+      document.getElementById('prv-empty').style.display = hasAny ? 'none' : '';
+    }
+
+    function setPersonEditMode(editOn) {
+      _profileInEditMode = editOn;
+      document.getElementById('profileReadView').style.display  = editOn ? 'none' : '';
+      document.getElementById('profileEditView').style.display  = editOn ? ''     : 'none';
+      document.getElementById('personEditBtn').style.display    = editOn ? 'none' : '';
+      document.getElementById('personSaveBtn').style.display    = editOn ? ''     : 'none';
+      if (editOn && _activePerson) populateEditFields(_activePerson);
+    }
+
+    function openPersonModal(p) {
+      const isNew = !p.id;
+      _activePerson = p;
+      _selectedDot = p.dot || 'yellow';
+      document.getElementById('personModalName').textContent = isNew ? 'New Contact' : p.name;
+      document.getElementById('personDeleteBtn').style.display = isNew ? 'none' : '';
+      // Dot chips
+      renderDotChips(_selectedDot, !isNew);
       // Reset to Profile tab
       document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
       document.querySelectorAll('.ptab-panel').forEach(t=>t.style.display='none');
       document.querySelector('.ptab[data-tab="profile"]').classList.add('active');
       document.getElementById('ptab-profile').style.display='';
+      // Start in read mode for existing, edit mode for new
+      if (isNew) {
+        setPersonEditMode(true);
+        setTimeout(()=>document.getElementById('personNameInput')?.focus(), 120);
+      } else {
+        setPersonEditMode(false);
+        renderProfileReadView(p);
+      }
       renderPersonEventHistory(p);
       openModal('personModal');
     }
+
+    // FAB — add new person
+    document.getElementById('fabAddPerson')?.addEventListener('click', () => openPersonModal({}));
 
     // Tab switching
     document.querySelectorAll('.ptab').forEach(tab => {
@@ -996,6 +1174,10 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.ptab-panel').forEach(t=>t.style.display='none');
         this.classList.add('active');
         document.getElementById('ptab-'+this.dataset.tab).style.display='';
+        // On non-profile tabs, hide save/show edit; on profile tab restore state
+        const onProfile = this.dataset.tab === 'profile';
+        document.getElementById('personEditBtn').style.display = (onProfile && !_profileInEditMode) ? '' : 'none';
+        document.getElementById('personSaveBtn').style.display = (!onProfile || _profileInEditMode) ? '' : 'none';
         if (this.dataset.tab === 'progress' && _activePerson) renderPersonProgress(_activePerson);
         if (this.dataset.tab === 'timeline' && _activePerson) renderPersonEventHistory(_activePerson);
       });
@@ -1006,7 +1188,7 @@ document.addEventListener('DOMContentLoaded', function () {
       panel.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Loading…</div>';
       // Stats
       const now = new Date();
-      const linked = _allEvents.filter(ev=>String(ev.person_id)===String(p.id)&&ev.start);
+      const linked = _allEvents.filter(ev=>(ev.person_ids||[]).includes(p.id)&&ev.start);
       const total = linked.length;
       const outings = linked.filter(ev=>ev.category==='social').length;
       const lastEv = linked.sort((a,b)=>new Date(b.start)-new Date(a.start))[0];
@@ -1057,7 +1239,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderPersonEventHistory(p) {
       const container=document.getElementById('personEventHistory');
-      const linked=_allEvents.filter(ev=>String(ev.person_id)===String(p.id)&&ev.start)
+      const linked=_allEvents.filter(ev=>(ev.person_ids||[]).includes(p.id)&&ev.start)
         .sort((a,b)=>new Date(b.start)-new Date(a.start));
       if (!linked.length) {
         container.innerHTML='<div style="color:var(--text-muted);font-size:0.83rem;padding:4px 0;">No events linked yet.</div>'; return;
@@ -1085,9 +1267,10 @@ document.addEventListener('DOMContentLoaded', function () {
           const evId = parseInt(this.dataset.id);
           const target = _allEvents.find(x=>x.id===evId);
           if (!target) return;
+          const newIds = (target.person_ids||[]).filter(id=>id!==_activePerson.id);
           await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({id:evId,title:target.title,start:target.start,end:target.end,
-              category:target.category,notes:target.notes||'',person_id:null,
+              category:target.category,notes:target.notes||'',person_ids:newIds,
               recur:target.recur||'none',recur_end:target.recur_end||null,
               recur_config:target.recur_config||null,is_backup:target.is_backup||0})});
           const eRes = await fetch('/api/events');
@@ -1101,19 +1284,37 @@ document.addEventListener('DOMContentLoaded', function () {
     ['personModalClose','personCancelBtn','personModalBackdrop'].forEach(id=>
       document.getElementById(id)?.addEventListener('click',()=>closeModal('personModal'))
     );
+    document.getElementById('personEditBtn')?.addEventListener('click', ()=>setPersonEditMode(true));
+
     document.getElementById('personSaveBtn').addEventListener('click', async ()=>{
-      if (!_activePerson) return;
-      await fetch('/api/people',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({id:_activePerson.id,
-          dot:document.getElementById('personDotEdit').value,
-          notes:document.getElementById('personNotes').value,
-          met_where:document.getElementById('personMetWhere').value,
-          met_when:document.getElementById('personMetWhen').value,
-          phone:document.getElementById('personPhone').value,
-          address:document.getElementById('personAddress').value,
-          birthday:document.getElementById('personBirthday').value,
-          instagram:document.getElementById('personInstagram').value})});
-      closeModal('personModal'); loadPeople();
+      if (_activePerson === null) return;
+      const nameVal = document.getElementById('personNameInput').value.trim();
+      if (!nameVal) { document.getElementById('personNameInput').focus(); return; }
+      const payload = {
+        name:      nameVal,
+        dot:       _selectedDot,
+        notes:     document.getElementById('personNotes').value,
+        met_where: document.getElementById('personMetWhere').value,
+        met_when:  document.getElementById('personMetWhen').value,
+        phone:     document.getElementById('personPhone').value,
+        address:   document.getElementById('personAddress').value,
+        birthday:  document.getElementById('personBirthday').value,
+        instagram: document.getElementById('personInstagram').value,
+      };
+      const isNew = !_activePerson.id;
+      if (!isNew) payload.id = _activePerson.id;
+      const res = await fetch('/api/people',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)});
+      if (isNew) {
+        closeModal('personModal');
+      } else {
+        // Update local and switch back to read mode
+        Object.assign(_activePerson, payload);
+        document.getElementById('personModalName').textContent = nameVal;
+        setPersonEditMode(false);
+        renderProfileReadView(_activePerson);
+      }
+      loadPeople();
     });
     document.getElementById('personDeleteBtn').addEventListener('click', async ()=>{
       if (!_activePerson||!confirm(`Delete ${_activePerson.name}?`)) return;
@@ -1126,7 +1327,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const list = document.getElementById('linkEventList');
       if (!list) return;
       const candidates = _allEvents
-        .filter(ev => !ev.person_id || String(ev.person_id) !== String(_activePerson?.id))
+        .filter(ev => !(ev.person_ids||[]).includes(_activePerson?.id))
         .filter(ev => ev.start)
         .filter(ev => !filter || (ev.title||'').toLowerCase().includes(filter))
         .sort((a,b) => new Date(b.start) - new Date(a.start))
@@ -1144,9 +1345,10 @@ document.addEventListener('DOMContentLoaded', function () {
             <div style="font-size:0.72rem;color:var(--text-muted);">${d} · ${ev.category||''}</div>
           </div>`;
         row.addEventListener('click', async () => {
+          const newIds = [...new Set([...(ev.person_ids||[]), _activePerson.id])];
           await fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({id:ev.id,title:ev.title,start:ev.start,end:ev.end,
-              category:ev.category,notes:ev.notes||'',person_id:_activePerson.id,
+              category:ev.category,notes:ev.notes||'',person_ids:newIds,
               recur:ev.recur||'none',recur_end:ev.recur_end||null,
               recur_config:ev.recur_config||null,is_backup:ev.is_backup||0})});
           const eRes = await fetch('/api/events');
@@ -1168,14 +1370,6 @@ document.addEventListener('DOMContentLoaded', function () {
       renderLinkEventList(this.value.toLowerCase());
     });
 
-    addPersonForm.addEventListener('submit', async function(e){
-      e.preventDefault();
-      const nameVal=addPersonForm.name.value.trim(); if (!nameVal) return;
-      await fetch('/api/people',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({name:nameVal,dot:addPersonForm.dot.value,
-          met_where:addPersonForm.met_where.value,met_when:addPersonForm.met_when.value})});
-      addPersonForm.reset(); loadPeople();
-    });
     loadPeople();
   }
 

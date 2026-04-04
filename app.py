@@ -123,6 +123,21 @@ def migrate_db():
     c.execute('''CREATE TABLE IF NOT EXISTS dot_history (
         id INTEGER PRIMARY KEY, user TEXT, person_id INTEGER,
         from_dot TEXT, to_dot TEXT, changed_at TEXT)''')
+    # event_people junction table (many-to-many events ↔ people)
+    c.execute('''CREATE TABLE IF NOT EXISTS event_people (
+        id INTEGER PRIMARY KEY, user TEXT, event_id INTEGER, person_id INTEGER,
+        UNIQUE(event_id, person_id))''')
+    # Migrate existing person_id column → event_people
+    try:
+        rows = conn.execute("SELECT id, user, person_id FROM events WHERE person_id IS NOT NULL").fetchall()
+        for row in rows:
+            try:
+                c.execute('INSERT OR IGNORE INTO event_people(user,event_id,person_id) VALUES(?,?,?)',
+                          (row[1], row[0], row[2]))
+            except Exception:
+                pass
+    except Exception:
+        pass
     # dot_settings table
     c.execute('''CREATE TABLE IF NOT EXISTS dot_settings (
         id INTEGER PRIMARY KEY, user TEXT, key TEXT, value TEXT,
@@ -198,6 +213,108 @@ def seed_dot_settings(user):
     conn.commit()
     conn.close()
 
+def seed_demo():
+    """Populate the 'demo' user with rich sample data. Idempotent — skips if events exist."""
+    user = 'demo'
+    db_query('INSERT OR IGNORE INTO users(username) VALUES (?)', (user,))
+    seed_goals(user)
+    seed_categories(user)
+    seed_dot_settings(user)
+
+    existing_ev = db_query('SELECT COUNT(*) as c FROM events WHERE user=?', (user,), one=True)
+    existing_pp = db_query('SELECT COUNT(*) as c FROM people WHERE user=?', (user,), one=True)
+    if (existing_ev and existing_ev['c'] > 0) or (existing_pp and existing_pp['c'] > 0):
+        return
+
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    mon = today - timedelta(days=today.weekday())   # Monday of current week
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # ── People ──────────────────────────────────────────────────────────────────
+    people_rows = [
+        # name, dot, met_where, met_when, phone, address, birthday, instagram, notes
+        ('Emma Wilson',           'yellow',    'YSA Ward',     'Jan 2026', '(801) 555-0191', '240 N 400 E, Provo, UT',      'Mar 14', '@emmawilson',  'Met at ward FHE. Loves hiking and cooking.'),
+        ('Jake Merrill',          'green',     'Institute',    'Feb 2026', '(801) 555-0342', '185 W 700 N, Provo, UT',      'Jun 22', '@jakemerrill', 'Two great dates. Asks great questions about faith.'),
+        ('Sofia Reyes',           'lightblue', 'Work',         'Nov 2025', '(801) 555-0573', '910 E 300 S, Salt Lake, UT',  'Sep 5',  '@sofia.reyes', 'Engaged to Marcus. Wedding coming up in June.'),
+        ('Tyler & Hannah Brooks', 'darkblue',  'Neighborhood', 'Mar 2026', '(801) 555-0814', '45 Oak Lane, Springville, UT','',       '',             'Great family nearby. Tyler plays guitar.'),
+        ('Chris Park',            'purple',    'Basketball',   'Oct 2025', '(801) 555-0265', '',                            'Nov 30', '@chrispark',   'Best friend. Basketball every Saturday morning.'),
+        ('Mia Chen',              'gray',      'School',       'Aug 2025', '(801) 555-0736', '',                            'Apr 28', '@miachen',     "Haven't heard from her in a while — should follow up."),
+        ('Derek Olsen',           'red',       'Work',         'Dec 2025', '',               '',                            '',       '',             'Asked to stop being contacted.'),
+    ]
+    person_ids = {}
+    for name, dot, mw, mwhen, phone, address, bday, ig, notes in people_rows:
+        c.execute(
+            'INSERT INTO people(user,name,dot,notes,met_where,met_when,phone,address,birthday,instagram) VALUES(?,?,?,?,?,?,?,?,?,?)',
+            (user, name, dot, notes, mw, mwhen, phone, address, bday, ig)
+        )
+        person_ids[name] = c.lastrowid
+
+    # Dot history (Jake: yellow→green; Sofia: yellow→green→lightblue)
+    jake_id  = person_ids['Jake Merrill']
+    sofia_id = person_ids['Sofia Reyes']
+    c.execute('INSERT INTO dot_history(user,person_id,from_dot,to_dot,changed_at) VALUES(?,?,?,?,?)',
+              (user, jake_id, 'yellow', 'green', (today - timedelta(days=14)).isoformat()))
+    c.execute('INSERT INTO dot_history(user,person_id,from_dot,to_dot,changed_at) VALUES(?,?,?,?,?)',
+              (user, sofia_id, 'yellow', 'green', (today - timedelta(days=60)).isoformat()))
+    c.execute('INSERT INTO dot_history(user,person_id,from_dot,to_dot,changed_at) VALUES(?,?,?,?,?)',
+              (user, sofia_id, 'green', 'lightblue', (today - timedelta(days=20)).isoformat()))
+
+    # ── Events ──────────────────────────────────────────────────────────────────
+    def ins(title, cat, day_off, sh, sm, eh, em, notes='', person=None,
+            completed=0, recur='none', recur_end=None):
+        d = mon + timedelta(days=day_off)
+        start = f"{d.strftime('%Y-%m-%d')}T{sh:02d}:{sm:02d}:00"
+        end   = f"{d.strftime('%Y-%m-%d')}T{eh:02d}:{em:02d}:00"
+        pid = person_ids.get(person) if person else None
+        c.execute(
+            'INSERT INTO events(user,title,start,end,category,notes,recur,recur_end,person_id,is_backup,completed) VALUES(?,?,?,?,?,?,?,?,?,0,?)',
+            (user, title, start, end, cat, notes, recur or 'none', recur_end, pid, completed)
+        )
+
+    end90  = (mon + timedelta(days=90)).strftime('%Y-%m-%d')
+    end365 = (mon + timedelta(days=365)).strftime('%Y-%m-%d')
+
+    # This week (Mon=0 … Sun=6)
+    ins('Scripture Study',            'study',   0,  7, 0,  7,30, 'Doctrine & Covenants 76', recur='daily', recur_end=end90)
+    ins('FHE with Emma',              'social',  1, 18, 0, 20, 0, 'Board games night at the church.', person='Emma Wilson')
+    ins('Institute Class',            'class',   2, 18,30, 20, 0, 'New Testament — week 10')
+    ins('Lunch with Jake',            'meal',    2, 12, 0, 13, 0, 'Talked about baptism.', person='Jake Merrill')
+    ins('Contact Emma',               'contact', 3, 17, 0, 17,30, 'Texted about Sunday plans.', person='Emma Wilson')
+    ins('Study / Prepare lesson',     'study',   3,  8, 0,  9, 0)
+    ins('Text Mia',                   'task',    3, 10, 0, 10,15, "Reach out and see how she's doing.", person='Mia Chen')
+    ins('Grocery run',                'task',    4,  9, 0,  9,30, 'Milk, eggs, cereal, olive oil', completed=1)
+    ins('Call Jake',                  'contact', 4, 14, 0, 14,30, 'Follow up on last study session.', person='Jake Merrill')
+    ins('Minister to the Petersons',  'meeting', 5, 15, 0, 16, 0, 'Monthly check-in visit.', recur='monthly')
+    ins('Pick up Sofia for activity', 'contact', 5, 10, 0, 10,30, person='Sofia Reyes')
+    ins('Church',                     'other',   6,  9, 0, 12, 0, 'Sacrament + Sunday school + priesthood', recur='weekly', recur_end=end365)
+
+    # Next week
+    ins('Temple Session',             'other',   7,  8, 0, 10, 0, 'Endowment session')
+    ins('Social Activity Night',      'social',  8, 18, 0, 21, 0, 'Volleyball night at the church gym')
+    ins('Service Project',            'service', 9,  9, 0, 12, 0, 'Cleaning up the community park')
+    ins('Dinner with Tyler & Hannah', 'meal',   10, 18, 0, 20, 0, person='Tyler & Hannah Brooks')
+    ins('Study / Plan next week',     'study',  11,  8, 0,  9, 0)
+    ins('Trip to Salt Lake City',     'travel', 14,  7, 0, 20, 0, 'General conference preparation trip')
+    ins('Wedding — Sofia & Marcus',   'wedding',68, 11, 0, 14, 0, 'Reception at 6pm. Need to buy a gift.', person='Sofia Reyes')
+
+    # Past events (for Progressing People card + timeline)
+    ins('FHE',                        'social',  -7, 18, 0, 20, 0, 'Went well — great connection.', person='Emma Wilson')
+    ins('Study session with Jake',    'study',   -6, 17, 0, 18,30, person='Jake Merrill')
+    ins('Dinner out',                 'meal',    -5, 18,30, 20, 0, 'Great Thai restaurant.', person='Jake Merrill')
+    ins('Basketball with Chris',      'social',  -8,  8, 0, 10, 0, person='Chris Park')
+    ins('Contact Sofia',              'contact', -3, 11, 0, 11,30, 'Congrats call on engagement.', person='Sofia Reyes')
+
+    # ── Indicators for current week ──────────────────────────────────────────────
+    week_key = mon.strftime('%Y-%m-%d')
+    for name, val in [('Scripture Study', 4), ('Dates', 1), ('Inviting Friends', 2)]:
+        c.execute('INSERT OR REPLACE INTO indicators(user,week,name,value) VALUES(?,?,?,?)',
+                  (user, week_key, name, val))
+
+    conn.commit()
+    conn.close()
+
 # ── App ───────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = "dev-secret"
@@ -205,6 +322,7 @@ app.secret_key = "dev-secret"
 def setup():
     init_db()
     migrate_db()
+    seed_demo()
 
 try:
     app.before_first_request(setup)
@@ -392,38 +510,69 @@ def api_dot_settings():
 def api_events():
     user = require_user()
     if request.method == 'GET':
-        rows = db_query('SELECT * FROM events WHERE user=?', (user,))
-        return jsonify([dict(r) for r in rows])
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT e.*, GROUP_CONCAT(ep.person_id) as person_ids_str
+            FROM events e
+            LEFT JOIN event_people ep ON ep.event_id = e.id AND ep.user = e.user
+            WHERE e.user = ?
+            GROUP BY e.id
+        ''', (user,))
+        rows = cur.fetchall()
+        conn.close()
+        result = []
+        for r in rows:
+            d = dict(r)
+            pids_str = d.pop('person_ids_str', None)
+            d['person_ids'] = [int(x) for x in pids_str.split(',') if x] if pids_str else []
+            # backward compat: keep person_id as first attached person
+            d['person_id'] = d['person_ids'][0] if d['person_ids'] else None
+            result.append(d)
+        return jsonify(result)
     if request.method == 'POST':
         data = request.json
-        eid       = data.get('id')
-        recur     = data.get('recur', 'none') or 'none'
+        eid          = data.get('id')
+        recur        = data.get('recur', 'none') or 'none'
         recur_end    = data.get('recur_end') or None
-        person_id    = data.get('person_id') or None
         is_backup    = 1 if data.get('is_backup') else 0
         recur_config = data.get('recur_config') or None
         completed    = 1 if data.get('completed') else 0
+        # Collect person_ids — accept array or legacy single value
+        person_ids = data.get('person_ids') or []
+        if not person_ids and data.get('person_id'):
+            person_ids = [int(data['person_id'])]
+        person_ids = [int(p) for p in person_ids if p]
+        # Keep person_id column as first for backward compat
+        person_id = person_ids[0] if person_ids else None
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
         if eid:
-            db_query(
+            cur.execute(
                 'UPDATE events SET title=?,start=?,end=?,category=?,notes=?,recur=?,recur_end=?,person_id=?,is_backup=?,recur_config=?,completed=? WHERE id=? AND user=?',
                 (data.get('title'), data.get('start'), data.get('end'), data.get('category'),
                  data.get('notes'), recur, recur_end, person_id, is_backup, recur_config, completed, eid, user)
             )
+            cur.execute('DELETE FROM event_people WHERE event_id=? AND user=?', (eid, user))
+            for pid in person_ids:
+                cur.execute('INSERT OR IGNORE INTO event_people(user,event_id,person_id) VALUES(?,?,?)', (user, eid, pid))
+            conn.commit(); conn.close()
             return jsonify({'status': 'updated'})
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
         cur.execute(
             'INSERT INTO events(user,title,start,end,category,notes,recur,recur_end,person_id,is_backup,recur_config,completed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
             (user, data.get('title'), data.get('start'), data.get('end'), data.get('category'),
              data.get('notes'), recur, recur_end, person_id, is_backup, recur_config, completed)
         )
         last_id = cur.lastrowid
-        conn.commit()
-        conn.close()
+        for pid in person_ids:
+            cur.execute('INSERT OR IGNORE INTO event_people(user,event_id,person_id) VALUES(?,?,?)', (user, last_id, pid))
+        conn.commit(); conn.close()
         return jsonify({'status': 'created', 'id': last_id})
     if request.method == 'DELETE':
         eid = request.args.get('id')
         db_query('DELETE FROM events WHERE id=? AND user=?', (eid, user))
+        db_query('DELETE FROM event_people WHERE event_id=? AND user=?', (eid, user))
         return jsonify({'status': 'deleted'})
 
 # ── People API ────────────────────────────────────────────────────────────────

@@ -12,144 +12,144 @@
   <button class="btn btn-secondary btn-sm" id="copyShareLink">🔗 Copy Share Link</button>
 </div>
 
-<!-- Event Modal -->
-<div class="modal" id="eventModal">
-  <div class="modal-backdrop" id="modalBackdrop"></div>
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <span class="modal-title" id="modalHeading">New Event</span>
-        <button class="btn-close" id="modalClose">✕</button>
+<!-- ── Event Sheet ─────────────────────────────────────────────────────────── -->
+<div id="eventSheet" class="event-sheet">
+  <div class="es-handle"></div>
+
+  <!-- Recurring scope bar -->
+  <div id="esScopeBar" class="es-scope-bar" style="display:none;">
+    <span class="es-scope-label">Repeating event — edit:</span>
+    <div class="es-scope-btns">
+      <button id="esScopeOne" class="es-scope-btn">This event only</button>
+      <button id="esScopeAll" class="es-scope-btn active">All events</button>
+    </div>
+  </div>
+
+  <!-- Category strip -->
+  <div class="es-cat-strip" id="esCatStrip"></div>
+
+  <!-- Title -->
+  <input id="esTitle" class="es-title" placeholder="What's happening?" autocomplete="off" type="text">
+
+  <!-- Time row -->
+  <div class="es-row" id="esTimeRow">
+    <span class="es-row-icon">🕐</span>
+    <span id="esTimeDisplay" class="es-row-val es-muted">Set time…</span>
+    <svg class="es-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+  <div id="esTimePanel" class="es-sub-panel" style="display:none;">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;padding:4px 20px 12px;">
+      <div style="flex:1;min-width:110px;">
+        <div class="es-field-label">Start</div>
+        <input type="time" id="esStartTime" class="es-native-input">
       </div>
-      <!-- Shown for recurring events: choose scope -->
-      <div id="recurScopeBar" style="display:none;padding:8px 14px;background:#FFF7ED;border-bottom:1px solid #FDE68A;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="font-size:0.78rem;color:#92400E;flex:1;">Repeating event — editing:</span>
-        <button type="button" id="scopeOneBtn" class="btn btn-secondary btn-sm" style="font-size:0.73rem;">This event only</button>
-        <button type="button" id="scopeAllBtn" class="btn btn-primary btn-sm" style="font-size:0.73rem;">All events</button>
+      <div style="flex:1;min-width:110px;">
+        <div class="es-field-label">End</div>
+        <input type="time" id="esEndTime" class="es-native-input">
       </div>
-      <div class="modal-body">
-        <form id="eventForm">
-          <input type="hidden" name="id" />
-          <input type="hidden" name="start_date" />
-          <input type="hidden" name="end_date" />
+    </div>
+    <div style="padding:0 20px 14px;">
+      <div class="es-field-label">Date</div>
+      <input type="date" id="esDateInput" class="es-native-input" style="width:100%;">
+    </div>
+  </div>
 
-          <div class="mb-3">
-            <label class="form-label">Event title</label>
-            <input name="title" class="form-control w-100" placeholder="What's happening?" />
-          </div>
+  <!-- Person row -->
+  <div class="es-row" id="esPersonRow">
+    <span class="es-row-icon">👤</span>
+    <span id="esPersonDisplay" class="es-row-val es-muted">No one attached</span>
+    <svg class="es-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+  <div id="esPersonPanel" class="es-sub-panel" style="display:none;">
+    <div id="esPersonChips" class="es-person-chips"></div>
+  </div>
 
-          <div class="row">
-            <div class="col-6">
-              <label class="form-label">Start time</label>
-              <div class="d-flex gap-2">
-                <select name="start_hour" class="form-select">
-                  {% for h in range(1,13) %}<option value="{{h}}">{{h}}</option>{% endfor %}
-                </select>
-                <select name="start_minute" class="form-select">
-                  {% for m in range(0,60) %}<option value="{{'%02d'%m}}">{{'%02d'%m}}</option>{% endfor %}
-                </select>
-                <select name="start_ampm" class="form-select">
-                  <option>AM</option><option>PM</option>
-                </select>
-              </div>
-            </div>
-            <div class="col-6">
-              <label class="form-label">End time</label>
-              <div class="d-flex gap-2">
-                <select name="end_hour" class="form-select">
-                  {% for h in range(1,13) %}<option value="{{h}}">{{h}}</option>{% endfor %}
-                </select>
-                <select name="end_minute" class="form-select">
-                  {% for m in range(0,60) %}<option value="{{'%02d'%m}}">{{'%02d'%m}}</option>{% endfor %}
-                </select>
-                <select name="end_ampm" class="form-select">
-                  <option>AM</option><option>PM</option>
-                </select>
-              </div>
-            </div>
-          </div>
+  <!-- Notes row -->
+  <div class="es-row" id="esNotesRow">
+    <span class="es-row-icon">📝</span>
+    <span id="esNotesPreview" class="es-row-val es-muted">Add notes…</span>
+    <svg class="es-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+  <div id="esNotesPanel" class="es-sub-panel" style="display:none;">
+    <textarea id="esNotesInput" class="es-notes-input" rows="3" placeholder="Plans, thoughts, reflections…"></textarea>
+  </div>
 
-          <div class="row" style="margin-top:10px;">
-            <div class="col-6">
-              <label class="form-label">Category</label>
-              <select name="category" id="eventCategorySelect" class="form-select w-100">
-                <!-- populated by JS from /api/categories -->
-              </select>
-            </div>
-            <div class="col-6">
-              <label class="form-label">Person (optional)</label>
-              <select name="person_id" id="personSelect" class="form-select w-100">
-                <option value="">— no one attached —</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Recurrence -->
-          <div class="row" style="margin-top:10px;">
-            <div class="col-6">
-              <label class="form-label">Repeats</label>
-              <select name="recur" class="form-select w-100" id="recurSelect">
-                <option value="none">Does not repeat</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </div>
-            <div class="col-6" id="recurEndWrap" style="display:none;">
-              <label class="form-label">End date <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-              <input type="date" name="recur_end" class="form-control w-100" />
-            </div>
-          </div>
-          <!-- Weekly: which days -->
-          <div id="recurWeekDaysWrap" style="display:none;margin-top:8px;">
-            <label class="form-label">Repeat on</label>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;">
-              {% for val, lbl in [(0,'Su'),(1,'Mo'),(2,'Tu'),(3,'We'),(4,'Th'),(5,'Fr'),(6,'Sa')] %}
-              <label style="display:flex;flex-direction:column;align-items:center;gap:3px;font-size:0.72rem;font-weight:600;color:var(--text-muted);cursor:pointer;">
-                <input type="checkbox" name="rday" value="{{ val }}" style="accent-color:var(--primary);"/>
-                {{ lbl }}
-              </label>
-              {% endfor %}
-            </div>
-          </div>
-          <!-- Monthly: by date or by weekday -->
-          <div id="recurMonthlyWrap" style="display:none;margin-top:8px;">
-            <label class="form-label">Repeat pattern</label>
-            <select id="recurMonthlyType" class="form-select w-100">
-              <option value="date">Same date each month (e.g., the 7th)</option>
-              <option value="weekday">Same weekday each month (e.g., first Monday)</option>
-            </select>
-            <div id="recurMonthlyDesc" style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;font-style:italic;"></div>
-          </div>
-
-          <div class="mb-2" style="margin-top:10px;">
-            <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control w-100" rows="2" placeholder="Plans, thoughts, reflections…"></textarea>
-          </div>
-
-          <label style="display:flex;align-items:center;gap:7px;font-size:0.82rem;color:var(--text-muted);cursor:pointer;margin-top:4px;">
-            <input type="checkbox" name="is_backup" id="isBackupCheck" style="accent-color:var(--primary);"/>
-            Backup plan <span style="font-size:0.72rem;">(shown with dashed border)</span>
-          </label>
-          <label id="taskCompleteWrap" style="display:none;align-items:center;gap:7px;font-size:0.82rem;color:var(--text-muted);cursor:pointer;margin-top:4px;">
-            <input type="checkbox" id="taskCompleteCheck" style="accent-color:#65A30D;"/>
-            Mark as completed
-          </label>
-        </form>
+  <!-- More options -->
+  <div class="es-row es-more-row" id="esMoreToggle">
+    <span class="es-row-icon" style="opacity:0.5;font-size:0.9rem;">⚙️</span>
+    <span class="es-row-val" style="color:var(--text-muted);font-size:0.85rem;">More options</span>
+    <svg class="es-chevron" id="esMoreChevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+  <div id="esMorePanel" style="display:none;">
+    <!-- Repeat -->
+    <div class="es-option-row">
+      <span class="es-option-label">↻ Repeat</span>
+      <select id="esRecurSelect" class="es-mini-select">
+        <option value="none">Never</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </div>
+    <div id="esRecurEndRow" class="es-option-row" style="display:none;">
+      <span class="es-option-label" style="color:var(--text-muted);font-size:0.8rem;">Until</span>
+      <input type="date" id="esRecurEnd" class="es-native-input" style="flex:1;max-width:180px;">
+    </div>
+    <div id="esRecurDaysRow" style="display:none;padding:4px 20px 12px;">
+      <div class="es-field-label">Repeat on</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        {% for val, lbl in [(0,'Su'),(1,'Mo'),(2,'Tu'),(3,'We'),(4,'Th'),(5,'Fr'),(6,'Sa')] %}
+        <label class="es-day-chip">
+          <input type="checkbox" name="esRday" value="{{ val }}">
+          <span>{{ lbl }}</span>
+        </label>
+        {% endfor %}
       </div>
-      <div class="modal-footer">
-        <button id="deleteOneEvent" class="btn btn-danger btn-sm" style="display:none;font-size:0.73rem;">Delete this only</button>
-        <button id="deleteEvent" class="btn btn-danger btn-sm" style="display:none;">Delete all</button>
-        <span class="me-auto"></span>
-        <button id="closeEvent" class="btn btn-secondary btn-sm">Cancel</button>
-        <button id="saveEvent" class="btn btn-primary btn-sm">Save</button>
+    </div>
+    <div id="esRecurMonthlyRow" class="es-option-row" style="display:none;">
+      <span class="es-option-label" style="font-size:0.8rem;">Pattern</span>
+      <select id="esRecurMonthlyType" class="es-mini-select">
+        <option value="date">Same date each month</option>
+        <option value="weekday">Same weekday each month</option>
+      </select>
+    </div>
+    <!-- Backup toggle -->
+    <div class="es-option-row">
+      <div>
+        <div class="es-option-label">Backup plan</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">Shows lighter, on the right</div>
       </div>
+      <label class="es-toggle-pill">
+        <input type="checkbox" id="esBackupToggle">
+        <span></span>
+      </label>
+    </div>
+    <!-- Task complete -->
+    <div id="esTaskCompleteRow" class="es-option-row" style="display:none;">
+      <span class="es-option-label">Mark complete ✓</span>
+      <label class="es-toggle-pill">
+        <input type="checkbox" id="esTaskComplete">
+        <span></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="es-footer">
+    <div style="display:flex;gap:6px;">
+      <button id="esDeleteAll" class="btn btn-danger btn-sm" style="display:none;font-size:0.78rem;">Delete all</button>
+      <button id="esDeleteOne" class="btn btn-danger btn-sm" style="display:none;font-size:0.78rem;">Delete this</button>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="esCancel" class="btn btn-secondary btn-sm">Cancel</button>
+      <button id="esSave" class="btn btn-primary btn-sm">Save</button>
     </div>
   </div>
 </div>
+<div id="esBackdrop" class="es-backdrop"></div>
 
-<!-- Mobile Event Bottom Sheet -->
+<!-- Mobile Event Bottom Sheet (new events on mobile only) -->
 <div id="mobileSheet" class="mobile-sheet">
   <div class="ms-handle"></div>
   <div class="ms-header">
@@ -158,11 +158,9 @@
     <button id="msSave" class="btn btn-primary btn-sm" style="font-size:0.8rem;" disabled>Save</button>
   </div>
   <div id="msDateStrip" class="ms-date-strip" style="display:none;"></div>
-  <!-- Step 1: category picker -->
   <div id="msStep1">
     <div class="ms-cat-grid" id="msCatGrid"></div>
   </div>
-  <!-- Step 2: duration + details -->
   <div id="msStep2" style="display:none;">
     <div class="ms-time-display">
       <span id="msTimeStart" style="font-size:0.82rem;font-weight:700;white-space:nowrap;"></span>
@@ -184,15 +182,5 @@
   </div>
 </div>
 <div id="msBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:1999;"></div>
-
-<script>
-// Recur UI is driven by app.js updateRecurUI(); this is just a safety fallback
-document.getElementById('recurSelect').addEventListener('change', function() {
-  if (typeof updateRecurUI === 'function') updateRecurUI(this.value, null);
-});
-document.getElementById('recurMonthlyType')?.addEventListener('change', function(){
-  if (typeof updateMonthlyDesc === 'function') updateMonthlyDesc(null);
-});
-</script>
 
 {% endblock %}
