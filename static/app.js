@@ -1097,10 +1097,15 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!row) return;
       row.innerHTML = '';
       DOT_ORDER.forEach(key => {
+        const wrap = document.createElement('div');
+        wrap.className = 'dot-chip-wrap';
         const chip = document.createElement('button');
         chip.title = DOT_LABEL[key] || key;
         chip.className = 'dot-chip' + (key === _selectedDot ? ' selected' : '');
         chip.style.background = DOT_COLOR[key] || '#EAB308';
+        const lbl = document.createElement('div');
+        lbl.className = 'dot-chip-label' + (key === _selectedDot ? ' selected' : '');
+        lbl.textContent = DOT_LABEL[key] || key;
         chip.addEventListener('click', async () => {
           _selectedDot = key;
           renderDotChips(key, _profileInEditMode ? false : true);
