@@ -203,6 +203,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let calInstance = null;
 
     // ── Event Sheet state ─────────────────────────────────────────────────────
+    let esState = 'closed'; // 'closed' | 'open' | 'mini'
     let _esEventId = null;
     let _esCategory = null;
     let _esPersonIds = [];
