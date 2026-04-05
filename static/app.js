@@ -1597,8 +1597,14 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch('/api/dot-settings').then(r=>r.json())
       ]);
       renderGoals(); renderCats(); renderDotDefs();
-      document.getElementById('datesForGreen').value = _dotSettings['dates_for_green']||'2';
-      document.getElementById('inactivityDays').value = _dotSettings['inactivity_days']||'30';
+      const dfg = _dotSettings['dates_for_green']||'2';
+      const iad = _dotSettings['inactivity_days']||'30';
+      document.getElementById('datesForGreen').value = dfg;
+      document.getElementById('inactivityDays').value = iad;
+      const dfgDisp = document.getElementById('datesForGreenDisplay');
+      const iadDisp = document.getElementById('inactivityDaysDisplay');
+      if (dfgDisp) dfgDisp.textContent = dfg;
+      if (iadDisp) iadDisp.textContent = iad;
     }
 
     // ── Goals ─────────────────────────────────────────────────────────────────
