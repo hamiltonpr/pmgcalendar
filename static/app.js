@@ -1733,48 +1733,44 @@ document.addEventListener('DOMContentLoaded', function () {
         const color=_dotSettings[`dot_${k}_color`]||'#9CA3AF';
         const card=document.createElement('div'); card.className='dot-def-card';
         card.innerHTML=`
-          <div class="dot-def-preview">
-            <div class="dot-def-swatch" style="background:${color};"></div>
-            <div class="dot-def-name">${escapeHtml(label)}</div>
-          </div>
-          <div class="dot-def-editor" style="display:none;">
-            <input type="color" value="${color}" data-key="dot_${k}_color" class="dot-def-color-pick"/>
-            <input type="text" value="${escapeHtml(label)}" data-key="dot_${k}_label"
-              class="form-control" style="font-size:0.83rem;padding:5px 8px;" placeholder="Label"/>
-            <button class="btn btn-primary btn-sm dot-def-done">Done</button>
-          </div>`;
-        const swatch=card.querySelector('.dot-def-swatch');
-        const nameEl=card.querySelector('.dot-def-name');
-        const editor=card.querySelector('.dot-def-editor');
-        const colorPick=card.querySelector('.dot-def-color-pick');
-        const labelInput=card.querySelector(`[data-key="dot_${k}_label"]`);
-        card.querySelector('.dot-def-preview').addEventListener('click',()=>{
-          const isOpen=editor.style.display!=='none';
-          grid.querySelectorAll('.dot-def-editor').forEach(el=>el.style.display='none');
-          grid.querySelectorAll('.dot-def-card').forEach(el=>el.classList.remove('editing'));
-          if (!isOpen) { editor.style.display=''; card.classList.add('editing'); }
-        });
-        colorPick.addEventListener('input',()=>{ swatch.style.background=colorPick.value; });
-        labelInput.addEventListener('input',()=>{ nameEl.textContent=labelInput.value||k; });
-        card.querySelector('.dot-def-done').addEventListener('click',()=>{
-          editor.style.display='none'; card.classList.remove('editing');
-        });
+          <div class="dot-def-swatch" style="background:${color};"></div>
+          <div class="dot-def-name">${escapeHtml(label)}</div>`;
+        card.addEventListener('click',()=>openDotDefModal(k));
         grid.appendChild(card);
       });
+    }
+
+    function openDotDefModal(k) {
+      document.getElementById('dotDefEditKey').value=k;
+      document.getElementById('dotDefEditColor').value=_dotSettings[`dot_${k}_color`]||'#9CA3AF';
+      document.getElementById('dotDefEditLabel').value=_dotSettings[`dot_${k}_label`]||k;
+      openModal('dotDefModal');
     }
 
     async function saveAllDotSettings() {
       const settings={..._dotSettings,
         dates_for_green:document.getElementById('datesForGreen').value,
         inactivity_days:document.getElementById('inactivityDays').value};
-      document.querySelectorAll('[data-key^="dot_"]').forEach(el=>{ settings[el.dataset.key]=el.value; });
       await fetch('/api/dot-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});
       _dotSettings=settings;
       alert('Saved!');
     }
 
     document.getElementById('saveRulesBtn').addEventListener('click', saveAllDotSettings);
-    document.getElementById('saveDotDefsBtn').addEventListener('click', saveAllDotSettings);
+
+    ['dotDefModalClose','dotDefCancelBtn','dotDefModalBackdrop'].forEach(id=>
+      document.getElementById(id)?.addEventListener('click',()=>closeModal('dotDefModal'))
+    );
+    document.getElementById('dotDefSaveBtn')?.addEventListener('click', async ()=>{
+      const k=document.getElementById('dotDefEditKey').value;
+      _dotSettings[`dot_${k}_color`]=document.getElementById('dotDefEditColor').value;
+      _dotSettings[`dot_${k}_label`]=document.getElementById('dotDefEditLabel').value;
+      await fetch('/api/dot-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_dotSettings)});
+      closeModal('dotDefModal');
+      renderDotDefs();
+      DOT_COLOR[k]=_dotSettings[`dot_${k}_color`];
+      DOT_LABEL[k]=_dotSettings[`dot_${k}_label`];
+    });
 
     // ── Google Calendar (.ics) import ─────────────────────────────────────────
     let _icalFile = null;
