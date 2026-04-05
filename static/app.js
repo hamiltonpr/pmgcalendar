@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function () {
               id: e._instanceId||e.id,
               title: e.title,
               start: e.start, end: e.end,
-              allDay: !e.start || !e.start.includes('T'),
+              allDay: !!e.is_allday || !e.start || !e.start.includes('T'),
               backgroundColor: categoryColorMap[e.category]||'#6B7280',
               borderColor:     categoryColorMap[e.category]||'#6B7280',
               textColor: '#fff',
