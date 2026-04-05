@@ -906,6 +906,21 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('indToggleLabel').textContent=ind.toggleLabel;
         updateToggleBtns(_modalVal);
       }
+      // Render contributing calendar events
+      const srcEl = document.getElementById('indSources');
+      if (srcEl) {
+        const srcs = autoSources[ind.name]||[];
+        if (srcs.length) {
+          const DAY=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+          const pills = srcs.map(s=>{
+            const d=new Date(s.start);
+            const label=`${DAY[d.getDay()]} ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`;
+            return `<div class="ind-source-pill">${escapeHtml(s.title)} <span class="ind-source-time">${label}</span></div>`;
+          }).join('');
+          srcEl.innerHTML=`<div class="ind-source-header">From calendar</div>${pills}`;
+          srcEl.style.display='';
+        } else { srcEl.style.display='none'; }
+      }
       openModal('indicatorModal');
     }
 
