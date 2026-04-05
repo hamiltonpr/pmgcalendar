@@ -1093,6 +1093,67 @@ body.login-page {
   gap: 8px;
 }
 
+/* ── Dot definition cards (Settings) ─────────────── */
+.dot-def-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+}
+.dot-def-card {
+  flex: 1;
+  min-width: 72px;
+  max-width: 100px;
+  cursor: pointer;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  padding: 10px 8px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.dot-def-card:hover { background: var(--bg); }
+.dot-def-card.editing {
+  flex-basis: 100%;
+  max-width: 100%;
+  border-color: var(--primary);
+  background: #EEF2FF;
+  cursor: default;
+}
+.dot-def-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.dot-def-swatch {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  flex-shrink: 0;
+}
+.dot-def-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  word-break: break-word;
+}
+.dot-def-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+}
+.dot-def-color-pick {
+  width: 48px; height: 40px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.dot-def-editor .form-control { flex: 1; min-width: 120px; }
+
 /* ── Dot chip selector ───────────────────────────── */
 .dot-chip-row {
   display: flex;
