@@ -203,6 +203,32 @@ body {
 .ind-value.done { background: #16A34A; }
 .ind-value.partial { background: #D97706; }
 
+/* ── Indicator Source Pills ─────────────────────── */
+.ind-source-header {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.ind-source-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  margin-bottom: 5px;
+  gap: 8px;
+}
+.ind-source-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* ── Quote Card ─────────────────────────────────── */
 .quote-card {
   background: linear-gradient(135deg, #1B3A6B 0%, #2B52A0 100%);
