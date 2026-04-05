@@ -910,11 +910,17 @@ def api_import_ical():
         recur_end    = ev.get('recur_end') or None
         recur_config = ev.get('recur_config') or None
         is_backup    = 1 if ev.get('is_backup') else 0
+        is_allday    = 1 if (ev.get('is_allday') or (start and 'T' not in start)) else 0
+        # Ensure all-day events have date-only start/end (strip any time)
+        if is_allday and start and 'T' in start:
+            start = start[:10]
+        if is_allday and end and 'T' in end:
+            end = end[:10]
         if not start:
             continue
         cur.execute(
-            'INSERT INTO events(user,title,start,end,category,notes,recur,recur_end,recur_config,is_backup,imported) VALUES(?,?,?,?,?,?,?,?,?,?,1)',
-            (user, title, start, end, category, notes, recur, recur_end, recur_config, is_backup)
+            'INSERT INTO events(user,title,start,end,category,notes,recur,recur_end,recur_config,is_backup,imported,is_allday) VALUES(?,?,?,?,?,?,?,?,?,?,1,?)',
+            (user, title, start, end, category, notes, recur, recur_end, recur_config, is_backup, is_allday)
         )
         imported += 1
     conn.commit()
