@@ -1117,7 +1117,9 @@ document.addEventListener('DOMContentLoaded', function () {
             loadPeople();
           }
         });
-        row.appendChild(chip);
+        wrap.appendChild(chip);
+        wrap.appendChild(lbl);
+        row.appendChild(wrap);
       });
     }
 
