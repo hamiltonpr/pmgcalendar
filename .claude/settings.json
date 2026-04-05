@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Read(//c/Users/egiap/**)",
+      "Bash(npx create-expo-app@latest lmg-mobile --template blank)",
+      "Bash(npm install:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\egiap\\lmg-mobile"
     ]
   }
 }
