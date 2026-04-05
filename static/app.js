@@ -960,7 +960,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const now = new Date();
       const monday = new Date(weekKey+'T00:00:00');
       const weekEnd = new Date(monday); weekEnd.setDate(monday.getDate()+7);
-      autoValues={};
+      autoValues={}; autoSources={};
       events.forEach(ev=>{
         if (!ev.start) return;
         const start=new Date(ev.start);
@@ -969,6 +969,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!g) return;
         if (g.ui_type==='toggle') autoValues[g.name]=1;
         else autoValues[g.name]=(autoValues[g.name]??0)+1;
+        if (!autoSources[g.name]) autoSources[g.name]=[];
+        autoSources[g.name].push({title:ev.title||'(no title)', start:ev.start});
       });
 
       const syncs=[];
