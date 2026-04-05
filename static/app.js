@@ -846,6 +846,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentGoals = [];
     let dbValues    = {};
     let autoValues  = {};
+    let autoSources = {};
     const PERIOD_LABEL = {daily:'/day',weekly:'/wk',monthly:'/mo',bimonthly:'/2mo'};
 
     function effectiveValue(ind) { return Math.max(dbValues[ind.name]??0, autoValues[ind.name]??0); }
