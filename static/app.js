@@ -549,7 +549,7 @@ document.addEventListener('DOMContentLoaded', function () {
         initialView: savedView,
         headerToolbar: { left:'prev,next today', center:'title', right:'timeGridDay,timeGridWeek,dayGridMonth,listWeek' },
         navLinks: true, nowIndicator: true, selectable: true, editable: true,
-        selectMirror: true, height: '100%', slotEventOverlap: false,
+        selectMirror: true, height: window.innerHeight - 54 - 62, slotEventOverlap: false,
         eventOrder: function(a, b) { return (a.extendedProps.is_backup||0) - (b.extendedProps.is_backup||0); },
         viewDidMount: function(info) { localStorage.setItem('calView', info.view.type); },
         eventDidMount: function(info) {
