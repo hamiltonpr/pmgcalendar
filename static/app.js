@@ -1764,6 +1764,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('saveRulesBtn').addEventListener('click', saveAllDotSettings);
 
+    // Stepper buttons for auto-rules
+    document.querySelectorAll('.rule-step-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const inputId = btn.dataset.target;
+        const delta   = parseInt(btn.dataset.delta, 10);
+        const input   = document.getElementById(inputId);
+        const dispId  = inputId + 'Display';
+        const disp    = document.getElementById(dispId);
+        if (!input) return;
+        const min = inputId === 'datesForGreen' ? 1 : 1;
+        const max = inputId === 'datesForGreen' ? 20 : 365;
+        let val = parseInt(input.value, 10) + delta;
+        val = Math.max(min, Math.min(max, val));
+        input.value = val;
+        if (disp) disp.textContent = val;
+      });
+    });
+
     ['dotDefModalClose','dotDefCancelBtn','dotDefModalBackdrop'].forEach(id=>
       document.getElementById(id)?.addEventListener('click',()=>closeModal('dotDefModal'))
     );
