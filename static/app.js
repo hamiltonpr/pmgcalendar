@@ -616,11 +616,23 @@ document.addEventListener('DOMContentLoaded', function () {
           const e=info.event;
           fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({id:e.id,start:e.start?.toISOString(),end:e.end?.toISOString()})});
+          if (esState === 'mini') {
+            const fmt = d => d ? d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+            const dateStr = e.start ? e.start.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+            const timeEl = document.getElementById('esMiniTime');
+            if (timeEl) timeEl.textContent = `${dateStr} · ${fmt(e.start)}${e.end?'–'+fmt(e.end):''}`;
+          }
         },
         eventResize: function(info) {
           const e=info.event;
           fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({id:e.id,start:e.start?.toISOString(),end:e.end?.toISOString()})});
+          if (esState === 'mini') {
+            const fmt = d => d ? d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+            const dateStr = e.start ? e.start.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+            const timeEl = document.getElementById('esMiniTime');
+            if (timeEl) timeEl.textContent = `${dateStr} · ${fmt(e.start)}${e.end?'–'+fmt(e.end):''}`;
+          }
         },
         events: function(fetchInfo, successCallback) {
           fetch('/api/events').then(r=>r.json()).then(data => {
