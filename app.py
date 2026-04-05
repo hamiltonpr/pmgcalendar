@@ -835,6 +835,12 @@ def api_ical_preview():
         end, _           = parse_ical_date(ev.get('DTEND', ''),   end_params,   tz_offset)
         if not end and ev.get('DURATION'):
             end = _apply_duration(start, ev['DURATION'], is_allday)
+        # Honour Microsoft/Apple all-day flag: strip time component
+        if ev.get('_FORCE_ALLDAY') and start and 'T' in start:
+            is_allday = True
+            start = start[:10]
+            if end and 'T' in end:
+                end = end[:10]
         if not start:
             continue
 
