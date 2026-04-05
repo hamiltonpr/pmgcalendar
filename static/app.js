@@ -454,6 +454,29 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('esCancel')?.addEventListener('click', closeEventSheet);
     document.getElementById('esBackdrop')?.addEventListener('click', closeEventSheet);
 
+    // ── Swipe-down gesture on handle ───────────────────────────────────────────
+    {
+      const sheet = document.getElementById('eventSheet');
+      const handle = sheet?.querySelector('.es-handle');
+      let _swipeStartY = 0;
+      handle?.addEventListener('touchstart', e => {
+        _swipeStartY = e.touches[0].clientY;
+      }, {passive: true});
+      handle?.addEventListener('touchend', e => {
+        const dy = e.changedTouches[0].clientY - _swipeStartY;
+        if (dy > 60) {
+          if (esState === 'open') setEsState('mini');
+          else if (esState === 'mini') setEsState('closed');
+        } else if (dy < -60 && esState === 'mini') {
+          setEsState('open');
+        }
+      });
+      // Tap on mini strip re-expands
+      document.getElementById('esMiniStrip')?.addEventListener('click', () => {
+        if (esState === 'mini') setEsState('open');
+      });
+    }
+
     // Scope buttons
     document.getElementById('esScopeOne')?.addEventListener('click', function() {
       _esEditScope = 'one';
