@@ -249,4 +249,34 @@
   </div>
 </div>
 
+<!-- Dot definition edit modal -->
+<div class="modal" id="dotDefModal">
+  <div class="modal-backdrop" id="dotDefModalBackdrop"></div>
+  <div class="modal-dialog" style="max-width:340px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title">Edit Dot</span>
+        <button class="btn-close" id="dotDefModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="dotDefEditKey"/>
+        <div style="display:flex;gap:10px;align-items:flex-end;" class="mb-3">
+          <div>
+            <label class="form-label">Color</label>
+            <input type="color" id="dotDefEditColor" class="form-control" style="width:64px;height:48px;padding:3px 6px;cursor:pointer;"/>
+          </div>
+          <div style="flex:1;">
+            <label class="form-label">Label</label>
+            <input id="dotDefEditLabel" class="form-control w-100" placeholder="e.g. Active contact"/>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="dotDefCancelBtn">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="dotDefSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
