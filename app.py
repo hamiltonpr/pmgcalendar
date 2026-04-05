@@ -712,6 +712,9 @@ def parse_ical(content):
                     current[key_base] = value
                 if params and (key_base + '_PARAMS') not in current:
                     current[key_base + '_PARAMS'] = params
+                # Microsoft/Outlook all-day flag
+                if key_base in ('X-MICROSOFT-CDO-ALLDAYEVENT', 'X-APPLE-ALL-DAY-EVENT'):
+                    current['_FORCE_ALLDAY'] = value.upper() in ('TRUE', '1')
             elif key_base == 'X-WR-CALNAME':
                 cal_name = value
     return events, cal_name
