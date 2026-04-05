@@ -1650,20 +1650,40 @@ document.addEventListener('DOMContentLoaded', function () {
     // ── Dot rules ─────────────────────────────────────────────────────────────
     function renderDotDefs() {
       const list=document.getElementById('dotDefsList'); list.innerHTML='';
-      const DOT_NAME={yellow:'Yellow',green:'Green',lightblue:'Light Blue',darkblue:'Dark Blue',purple:'Purple',gray:'Gray',red:'Red'};
+      const grid=document.createElement('div'); grid.className='dot-def-grid';
+      list.appendChild(grid);
       DOT_KEYS.forEach(k=>{
         const label=_dotSettings[`dot_${k}_label`]||k;
         const color=_dotSettings[`dot_${k}_color`]||'#9CA3AF';
-        const row=document.createElement('div'); row.className='settings-row';
-        row.innerHTML=`
-          <input type="color" value="${color}" data-key="dot_${k}_color"
-            style="width:34px;height:34px;border-radius:9px;border:1.5px solid var(--border);cursor:pointer;padding:2px;flex-shrink:0;"/>
-          <div style="flex:1;padding:0 10px;">
-            <div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:3px;">${DOT_NAME[k]}</div>
+        const card=document.createElement('div'); card.className='dot-def-card';
+        card.innerHTML=`
+          <div class="dot-def-preview">
+            <div class="dot-def-swatch" style="background:${color};"></div>
+            <div class="dot-def-name">${escapeHtml(label)}</div>
+          </div>
+          <div class="dot-def-editor" style="display:none;">
+            <input type="color" value="${color}" data-key="dot_${k}_color" class="dot-def-color-pick"/>
             <input type="text" value="${escapeHtml(label)}" data-key="dot_${k}_label"
-              class="form-control w-100" style="font-size:0.83rem;padding:6px 10px;" placeholder="Label"/>
+              class="form-control" style="font-size:0.83rem;padding:5px 8px;" placeholder="Label"/>
+            <button class="btn btn-primary btn-sm dot-def-done">Done</button>
           </div>`;
-        list.appendChild(row);
+        const swatch=card.querySelector('.dot-def-swatch');
+        const nameEl=card.querySelector('.dot-def-name');
+        const editor=card.querySelector('.dot-def-editor');
+        const colorPick=card.querySelector('.dot-def-color-pick');
+        const labelInput=card.querySelector(`[data-key="dot_${k}_label"]`);
+        card.querySelector('.dot-def-preview').addEventListener('click',()=>{
+          const isOpen=editor.style.display!=='none';
+          grid.querySelectorAll('.dot-def-editor').forEach(el=>el.style.display='none');
+          grid.querySelectorAll('.dot-def-card').forEach(el=>el.classList.remove('editing'));
+          if (!isOpen) { editor.style.display=''; card.classList.add('editing'); }
+        });
+        colorPick.addEventListener('input',()=>{ swatch.style.background=colorPick.value; });
+        labelInput.addEventListener('input',()=>{ nameEl.textContent=labelInput.value||k; });
+        card.querySelector('.dot-def-done').addEventListener('click',()=>{
+          editor.style.display='none'; card.classList.remove('editing');
+        });
+        grid.appendChild(card);
       });
     }
 
