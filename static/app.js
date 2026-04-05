@@ -448,8 +448,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function closeEventSheet() {
-      document.getElementById('eventSheet').classList.remove('open');
-      document.getElementById('esBackdrop').style.display = 'none';
+      setEsState('closed');
     }
 
     document.getElementById('esCancel')?.addEventListener('click', closeEventSheet);
