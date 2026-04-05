@@ -831,6 +831,39 @@ body.login-page {
   display: block;
   transform: translateY(0);
 }
+.event-sheet.mini {
+  display: block;
+  transform: translateY(0);
+  max-height: 56px;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  cursor: pointer;
+  box-shadow: 0 -4px 24px rgba(28,63,122,0.18);
+}
+.es-mini-strip {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 16px 10px;
+  gap: 8px;
+}
+.event-sheet.mini .es-mini-strip {
+  display: flex;
+}
+.es-mini-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.es-mini-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 .es-backdrop {
   display: none;
   position: fixed;
