@@ -80,7 +80,8 @@ def migrate_db():
                           ('person_id', 'INTEGER'), ('imported', 'INTEGER DEFAULT 0'),
                           ('is_backup', 'INTEGER DEFAULT 0'),
                           ('recur_config', 'TEXT'), ('recur_exceptions', 'TEXT'),
-                          ('completed', 'INTEGER DEFAULT 0')]:
+                          ('completed', 'INTEGER DEFAULT 0'),
+                          ('is_allday', 'INTEGER DEFAULT 0')]:
         try: c.execute(f'ALTER TABLE events ADD COLUMN {col} {typedef}')
         except Exception: pass
     # people extra columns
