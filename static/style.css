@@ -808,10 +808,9 @@ body.login-page {
   display: none;
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%) translateY(100%);
+  left: 0;
+  transform: translateY(100%);
   width: 100%;
-  max-width: 600px;
   z-index: 2100;
   background: var(--card-bg);
   border-radius: 22px 22px 0 0;
@@ -822,7 +821,7 @@ body.login-page {
 }
 .event-sheet.open {
   display: block;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 .es-backdrop {
   display: none;
