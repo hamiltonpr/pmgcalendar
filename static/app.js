@@ -408,9 +408,43 @@ document.addEventListener('DOMContentLoaded', function () {
       document.querySelectorAll('.es-chevron').forEach(c => c.classList.remove('open'));
 
       // Open sheet
-      document.getElementById('eventSheet').classList.add('open');
+      const sheet = document.getElementById('eventSheet');
+      sheet.classList.remove('mini');
+      sheet.classList.add('open');
       document.getElementById('esBackdrop').style.display = 'block';
+      esState = 'open';
+      updateEsMiniStrip();
       setTimeout(() => document.getElementById('esTitle').focus(), 150);
+    }
+
+    function updateEsMiniStrip() {
+      const titleEl = document.getElementById('esMiniTitle');
+      const timeEl  = document.getElementById('esMiniTime');
+      if (!titleEl || !timeEl) return;
+      const title = document.getElementById('esTitle')?.value || 'Event';
+      const date  = document.getElementById('esDateInput')?.value || '';
+      const start = document.getElementById('esStartTime')?.value || '';
+      const end   = document.getElementById('esEndTime')?.value || '';
+      titleEl.textContent = title || 'Event';
+      timeEl.textContent  = date && start ? `${date} · ${start}${end ? '–'+end : ''}` : '';
+    }
+
+    function setEsState(state) {
+      esState = state;
+      const sheet   = document.getElementById('eventSheet');
+      const backdrop = document.getElementById('esBackdrop');
+      if (state === 'open') {
+        sheet.classList.remove('mini');
+        sheet.classList.add('open');
+        backdrop.style.display = 'block';
+      } else if (state === 'mini') {
+        updateEsMiniStrip();
+        sheet.classList.add('mini');
+        backdrop.style.display = 'none';
+      } else {
+        sheet.classList.remove('open', 'mini');
+        backdrop.style.display = 'none';
+      }
     }
 
     function closeEventSheet() {
